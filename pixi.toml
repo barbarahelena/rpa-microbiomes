@@ -1,0 +1,19 @@
+[workspace]
+authors = ["Barbara Verhaar <barbaraverhaar@MacBook-Pro-van-Barbara.local>"]
+channels = ["conda-forge", "bioconda"]
+name = "rpa-microbiomes"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[tasks]
+install-bioc-data = "R -e \"BiocManager::install('GenomeInfoDbData', ask=FALSE, update=FALSE)\""
+
+[dependencies]
+bioconductor-phyloseq = { version = ">=1.50.0,<2", channel = "bioconda" }
+r-tidyverse = ">=2.0.0,<3"
+r-ggplot2 = ">=4.0.1,<5"
+r-haven = ">=2.5.5,<3"
+r = ">=4.4,<4.5"
+r-base = ">=4.4.3,<4.5"
+r-biocmanager = ">=1.30.27,<2"
+r-rio = ">=1.2.4,<2"
