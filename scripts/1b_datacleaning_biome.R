@@ -270,5 +270,40 @@ dim(batch1) # 3 samples in the last batch (broken fastqs)
 batch2 <- rio::import("data/raw/combined_table2.txt")
 dim(batch2) # 317 samples in the first batch
 tot <- full_join(batch1, batch2)
-dim(tot) # 320 in total table
-saveRDS(tot, "data/processed/metaphlantable.RDS")
+tot <- tot %>% filter(str_detect(clade_name, "s__") & !str_detect(clade_name, "t__")) # select species
+
+# Clean clade names
+clade <- tot$clade_name
+cladesplit <- str_split(clade, "\\|", n = 8, simplify = TRUE)
+cladesplit <- as.data.frame(cladesplit[,-8])
+colnames(cladesplit) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+cladesplit <- cladesplit %>% mutate(across(everything(.), ~str_remove_all(.x, "[a-z]__")))
+cladesplit$rowname <- clade
+saveRDS(cladesplit, "data/processed/shotgun_taxtable.RDS")
+rownames(tot) <- cladesplit$Species[match(cladesplit$rowname, tot$clade_name)]
+tot$clade_name <- NULL
+tot <- t(as.matrix(tot))
+head(tot)[1:5,1:5]
+
+# Replace IDs with helius IDs
+meta <- readRDS("data/processed/HELIUSmetadata_clean.RDS")
+rownames(tot) 
+meta$TongueSampleID
+sampleID <- case_when(rownames(tot) %in% meta$TongueSampleID ~ str_c(str_extract(rownames(tot), "[0-9]*(_)"), "Tongue"),
+                      rownames(tot) %in% meta$ThroatSampleID ~ str_c(str_extract(rownames(tot), "[0-9]*(_)"), "Throat"))
+all(str_extract(rownames(tot), "[0-9]*(_)") == str_extract(sampleID, "[0-9]*(_)")) # check if matches: TRUE
+sampleID
+rownames(tot) <- sampleID
+saveRDS(tot, "data/processed/metaphlantable_tot.RDS")
+
+# Extract tongue data
+tongue <- tot[ str_detect(rownames(tot), "Tongue"), ]
+rownames(tongue) <- str_remove(rownames(tongue), "_Tongue")
+head(tongue)[1:5,1:5]
+saveRDS(tongue, "data/processed/metahplan_tongue.RDS")
+
+# Extract throat data
+throat <- tot[ str_detect(rownames(tot), "Throat"), ]
+rownames(throat) <- str_remove(rownames(throat), "_Throat")
+head(throat)[1:5,1:5]
+saveRDS(throat, "data/processed/metaphlan_throat.RDS")
