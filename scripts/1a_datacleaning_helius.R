@@ -1,10 +1,8 @@
-## Data cleaning of clinical and microbiome data
+## Data cleaning of clinical data
 
 ## Libraries
-library(phyloseq)
 library(tidyverse)
 
-## Functions
 # Change type of variable - automatic detection of capitalization
 yesno_auto <- function(x) {
   vals <- as.character(x)
@@ -16,31 +14,10 @@ yesno_auto <- function(x) {
     as.factor(x)
   }
 }
+
 zero_one <- function(x) fct_recode(x, "No"="0", "Yes"="1")
 
-# 16S dataset
-ps <- readRDS("data/ps.2023_18_HELIUS_Swabs_RPA_2023.global.2025-09-05.curated.RDS")
-ps # 80408 taxa is way too many, considering to run benchmarked VSEARCH pipeline
-df <- as(sample_data(ps), "data.frame")
-head(df)
-names(df)
-str(df)
-df <- df |> dplyr::select(Subject_ID, Host_Body_Site, reads_total, reads_mapped, reads_filtered) |> 
-  mutate(Host_Body_Site = as.factor(Host_Body_Site))
-head(df)
-summary(df$Host_Body_Site)
-saveRDS(df, "data/16s_metadata.RDS")
-
-# Metagenomics: merge batches
-batch1 <- rio::import("data/combined_table.txt")
-dim(batch1) # 4 samples in the last batch (broken fastqs)
-batch2 <- rio::import("data/combined_table2.txt")
-dim(batch2) # 318 samples in the first batch
-tot <- full_join(batch1, batch2)
-dim(tot) # 321 in total table
-saveRDS(tot, "data/metaphlantable.RDS")
-
-## HELIUS datda
+## HELIUS data
 meta <- haven::read_sav("data/250606_HELIUS data Barbara Verhaar.sav")
 names(meta)
 
@@ -324,3 +301,4 @@ df_new2 <- df_new |>
 dim(df_new2)
 
 saveRDS(df_new2, "data/HELIUSmetadata_clean.RDS")
+  
