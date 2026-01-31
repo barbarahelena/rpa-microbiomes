@@ -18,7 +18,7 @@ yesno_auto <- function(x) {
 zero_one <- function(x) fct_recode(x, "No"="0", "Yes"="1")
 
 ## HELIUS data
-meta <- haven::read_sav("data/250606_HELIUS data Barbara Verhaar.sav")
+meta <- haven::read_sav("data/raw/250606_HELIUS data Barbara Verhaar.sav")
 names(meta)
 
 df_new <- meta |> 
@@ -300,5 +300,5 @@ df_new2 <- df_new |>
 
 dim(df_new2)
 
-saveRDS(df_new2, "data/HELIUSmetadata_clean.RDS")
+saveRDS(df_new2, "data/processed/HELIUSmetadata_clean.RDS")
   
