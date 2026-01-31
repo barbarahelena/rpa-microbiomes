@@ -294,13 +294,16 @@ sampleID <- case_when(rownames(tot) %in% meta$TongueSampleID ~ str_c(str_extract
 all(str_extract(rownames(tot), "[0-9]*(_)") == str_extract(sampleID, "[0-9]*(_)")) # check if matches: TRUE
 sampleID
 rownames(tot) <- sampleID
+tot <- as.data.frame(tot)
+tot <- tot |> mutate(across(everything(), function(x) case_when(is.na(x) ~ 0, .default = x)))
+rowSums(tot)
 saveRDS(tot, "data/processed/metaphlantable_tot.RDS")
 
 # Extract tongue data
 tongue <- tot[ str_detect(rownames(tot), "Tongue"), ]
 rownames(tongue) <- str_remove(rownames(tongue), "_Tongue")
 head(tongue)[1:5,1:5]
-saveRDS(tongue, "data/processed/metahplan_tongue.RDS")
+saveRDS(tongue, "data/processed/metaphlan_tongue.RDS")
 
 # Extract throat data
 throat <- tot[ str_detect(rownames(tot), "Throat"), ]
