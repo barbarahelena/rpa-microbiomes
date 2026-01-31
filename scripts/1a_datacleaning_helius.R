@@ -18,7 +18,7 @@ yesno_auto <- function(x) {
 zero_one <- function(x) fct_recode(x, "No"="0", "Yes"="1")
 
 ## HELIUS data
-meta <- haven::read_sav("data/250606_HELIUS data Barbara Verhaar.sav")
+meta <- haven::read_sav("data/raw/250606_HELIUS data Barbara Verhaar.sav")
 names(meta)
 
 df_new <- meta |> 
@@ -294,11 +294,15 @@ df_new2 <- df_new |>
              "low (men 0-4 gl/w, women 0-2 gl/w)" = "Low (men 0-4 gl/w, women 0-2 gl/w)",
              "moderate (men 5-14 gl/w, women 3-7 gl/w)" = "Moderate (men 5-14 gl/w, women 3-7 gl/w)",
              "high (men >14 gl/w, women >7 gl/wk)" = "High (men >14 gl/w, women >7 gl/wk)"
-           )
+           ),
+
+           # Strip the sample IDs to match metaphlan (without the well no)
+           TongueSampleID = str_extract(TongueSampleID, "[0-9]*_[0-9]*"),
+           ThroatSampleID = str_extract(ThroatSampleID, "[0-9]*_[0-9]*")
     ) |> 
     droplevels()
 
 dim(df_new2)
 
-saveRDS(df_new2, "data/HELIUSmetadata_clean.RDS")
+saveRDS(df_new2, "data/processed/HELIUSmetadata_clean.RDS")
   
