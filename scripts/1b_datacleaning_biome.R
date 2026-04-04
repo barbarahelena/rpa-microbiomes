@@ -305,10 +305,36 @@ saveRDS(tot, "data/processed/metaphlantable_tot.RDS")
 tongue <- tot[ str_detect(rownames(tot), "Tongue"), ]
 rownames(tongue) <- str_remove(rownames(tongue), "_Tongue")
 head(tongue)[1:5,1:5]
-saveRDS(tongue, "data/processed/metahplan_tongue.RDS")
+saveRDS(tongue, "data/processed/metaphlan_tongue.RDS")
 
 # Extract throat data
 throat <- tot[ str_detect(rownames(tot), "Throat"), ]
 rownames(throat) <- str_remove(rownames(throat), "_Throat")
 head(throat)[1:5,1:5]
 saveRDS(throat, "data/processed/metaphlan_throat.RDS")
+
+# Attach metadata to shotgun matrices as unified list objects (phyloseq-style)
+# Rownames in tongue/throat are plain numbers (e.g. "232920"); match via first
+# numeric field of TongueSampleID / ThroatSampleID (e.g. "232920_118875" -> "232920")
+taxtable <- readRDS("data/processed/shotgun_taxtable.RDS")
+
+make_shotgun_obj <- function(mat, meta, sample_id_col) {
+  key <- str_extract(meta[[sample_id_col]], "[0-9]+")
+  meta_matched <- as.data.frame(meta)[match(rownames(mat), key), ]
+  rownames(meta_matched) <- rownames(mat)
+  n_unmatched <- sum(is.na(meta_matched$ID))
+  if (n_unmatched > 0)
+    message(n_unmatched, " sample(s) in ", deparse(substitute(mat)),
+            " have no metadata match and will have NA rows in sample_data")
+  list(
+    counts      = mat,          # samples x species matrix
+    sample_data = meta_matched, # HELIUS clinical metadata, one row per sample
+    tax_table   = taxtable      # species-level taxonomy (Kingdom -> Species)
+  )
+}
+
+shotgun_throat <- make_shotgun_obj(throat, meta, "ThroatSampleID")
+shotgun_tongue <- make_shotgun_obj(tongue, meta, "TongueSampleID")
+
+saveRDS(shotgun_throat, "data/processed/shotgun_throat.RDS")
+saveRDS(shotgun_tongue, "data/processed/shotgun_tongue.RDS")
