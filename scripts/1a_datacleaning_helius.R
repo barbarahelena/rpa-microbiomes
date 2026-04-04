@@ -17,6 +17,10 @@ yesno_auto <- function(x) {
 
 zero_one <- function(x) fct_recode(x, "No"="0", "Yes"="1")
 
+## Set working directory to project root and create output directories if needed
+setwd(here::here())
+dir.create("data/processed", recursive = TRUE, showWarnings = FALSE)
+
 ## HELIUS data
 meta <- haven::read_sav("data/raw/250606_HELIUS data Barbara Verhaar.sav")
 names(meta)

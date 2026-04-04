@@ -1,8 +1,14 @@
 # Table 1 HELIUS population
 
 # Libraries
+library(here)
 library(tidyverse)
 library(tableone)
+library(phyloseq)
+
+# Set working directory to project root and create output directories if needed
+setwd(here::here())
+dir.create("results/tableone", recursive = TRUE, showWarnings = FALSE)
 
 # Data
 meta <- readRDS("data/processed/HELIUSmetadata_clean.RDS")

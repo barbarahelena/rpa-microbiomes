@@ -42,6 +42,11 @@ theme_Publication <- function(base_size=14, base_family="sans") {
         ))
       }
 
+# Set working directory to project root and create output directories if needed
+setwd(here::here())
+dir.create("data/processed", recursive = TRUE, showWarnings = FALSE)
+dir.create("results/rarefaction", recursive = TRUE, showWarnings = FALSE)
+
 # 16S dataset
 meta <- rio::import("data/raw/sample_sheet_withmeta.csv")
 names(meta)
@@ -160,7 +165,7 @@ rare_data <- lapply(seq_len(nrow(otu_nose)), function(i) {
 dev.off()
 df <- bind_rows(lapply(1:length(rare_data), function(i){
   tibble(
-    sample = rownames(otu)[i],
+    sample = rownames(otu_nose)[i],
     reads = as.numeric(str_remove(names(rare_data[[i]][[1]]), "N")),
     richness = as.numeric(rare_data[[i]][[1]])
   )
@@ -215,7 +220,7 @@ dev.off()
 # Convert rarecurve output into a tidy data frame
 df <- bind_rows(lapply(1:length(rare_data), function(i){
   tibble(
-    sample = rownames(otu)[i],
+    sample = rownames(otu_throat)[i],
     reads = as.numeric(str_remove(names(rare_data[[i]][[1]]), "N")),
     richness = as.numeric(rare_data[[i]][[1]])
   )
