@@ -2,7 +2,7 @@
 authors = ["Barbara Verhaar <barbaraverhaar@MacBook-Pro-van-Barbara.local>"]
 channels = ["conda-forge", "bioconda"]
 name = "rpa-microbiomes"
-platforms = ["osx-arm64"]
+platforms = ["osx-arm64", "linux-64"]
 version = "0.1.0"
 
 [tasks]
