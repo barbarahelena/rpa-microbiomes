@@ -7,6 +7,7 @@ library(here)
 library(tidyverse)
 library(phyloseq)
 library(broom)
+library(ggpubr)
 
 ## Functions
 theme_Publication <- function(base_size=14, base_family="sans") {
@@ -151,13 +152,18 @@ for (site_name in names(sites)) {
 
     ggplot(alpha_long, aes(x = EthnicityTotal, y = value, fill = EthnicityTotal)) +
         geom_boxplot(outlier.shape = 21, outlier.size = 0.8, alpha = 0.7) +
+        stat_compare_means(method = "wilcox.test", label = "p.signif",
+                           comparisons = list(c("Dutch", "South-Asian Surinamese"))) +
         facet_wrap(~ metric, scales = "free_y", nrow = 1) +
         scale_fill_manual(values = eth_colours) +
         labs(x = NULL, y = "Value", fill = "Ethnicity",
              title = paste0("Alpha diversity by ethnicity - 16S ", site_name),
              subtitle = subtitle_text,
              caption = paste0("Rarefied to ", format(rare_depth, big.mark = ","),
-                              " reads/sample")) +
+                              " reads/sample. Wilcoxon rank-sum test: ",
+                              "ns p > 0.05, * p < 0.05, ** p < 0.01, ",
+                              "*** p < 0.001, **** p < 0.0001")) +
+        scale_y_continuous(expand = expansion(mult = c(0.05, 0.15))) +
         theme_Publication() +
         theme(axis.text.x = element_text(angle = 25, hjust = 1))
     ggsave(paste0("results/alpha_diversity/alpha_diversity_boxplot_16s_",
