@@ -143,9 +143,7 @@ ps_nose <- prune_samples(nose_samples, psnoneg)
 sample_names(ps_nose) <- str_remove(sample_names(ps_nose), "_Nose")
 ps_nose
 
-# Save the split phyloseq objects
-saveRDS(ps_throat, "data/processed/ps_throat.RDS")
-saveRDS(ps_nose, "data/processed/ps_nose.RDS")
+# Split phyloseq objects saved later (after HELIUS metadata linkage)
 
 # Rarefaction nose samples
 otu_nose <- t(as(otu_table(ps_nose), "matrix"))
@@ -265,9 +263,35 @@ ps_throat_rarefied # 1626 taxa and 2390 samples
 sample_names(ps_nose_rarefied)
 sample_names(ps_throat_rarefied)
 
-# Save rarefied phyloseq objects
-saveRDS(ps_nose_rarefied, "data/processed/ps_nose_rarefied.RDS")
+# Link 16S samples to HELIUS clinical metadata via ID offset
+# Ext_ID (6-digit) + 1900253 = HELIUS internal ID (7-digit)
+helius_meta <- readRDS("data/processed/HELIUSmetadata_clean.RDS")
+
+add_helius_metadata <- function(ps, helius_meta) {
+  sdata <- data.frame(sample_data(ps))
+  sdata$sample_name_orig <- sample_names(ps)
+  sdata$HELIUS_ID <- paste0("S", as.numeric(sdata$Ext_ID) + 1900253)
+  merged <- left_join(sdata, helius_meta, by = c("HELIUS_ID" = "ID"))
+  rownames(merged) <- merged$sample_name_orig
+  sample_data(ps) <- sample_data(merged)
+  ps
+}
+
+ps_throat_rarefied <- add_helius_metadata(ps_throat_rarefied, helius_meta)
+ps_nose_rarefied <- add_helius_metadata(ps_nose_rarefied, helius_meta)
+ps_throat <- add_helius_metadata(ps_throat, helius_meta)
+ps_nose <- add_helius_metadata(ps_nose, helius_meta)
+
+cat("16S throat rarefied: matched", sum(!is.na(sample_data(ps_throat_rarefied)$Ethnicity)),
+    "/", nsamples(ps_throat_rarefied), "to HELIUS metadata\n")
+cat("16S nose rarefied: matched", sum(!is.na(sample_data(ps_nose_rarefied)$Ethnicity)),
+    "/", nsamples(ps_nose_rarefied), "to HELIUS metadata\n")
+
+# Save phyloseq objects (with HELIUS metadata)
+saveRDS(ps_throat, "data/processed/ps_throat.RDS")
+saveRDS(ps_nose, "data/processed/ps_nose.RDS")
 saveRDS(ps_throat_rarefied, "data/processed/ps_throat_rarefied.RDS")
+saveRDS(ps_nose_rarefied, "data/processed/ps_nose_rarefied.RDS")
 
 # Metagenomics: merge batches
 batch1 <- rio::import("data/raw/combined_table.txt")
