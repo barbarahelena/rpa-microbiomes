@@ -66,6 +66,13 @@ write.csv(table_one_csv, "results/tableone/table_shotgun.csv", row.names = TRUE)
 
 ## 16S subset
 ps <- readRDS("data/processed/ps_throat_rarefied.RDS")
-ids <- sample_names(ps)
-str_length(ids[[1]])
-str_length(meta$ID[1]) # these are different IDs which makes matching with 16S data impossible
+psmeta <- as(sample_data(ps), "data.frame")
+
+table_one_16s <- CreateTableOne(
+  vars = vars_table1,
+  strata = "EthnicityTotal",
+  data = psmeta,
+  test = TRUE
+)
+table_one_16s_csv <- print(table_one_16s, nonnormal = c(""), quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
+write.csv(table_one_16s_csv, "results/tableone/table_16S.csv", row.names = TRUE)
