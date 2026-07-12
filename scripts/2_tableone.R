@@ -14,45 +14,79 @@ dir.create("results/tableone", recursive = TRUE, showWarnings = FALSE)
 meta <- readRDS("data/processed/HELIUSmetadata_clean.RDS")
 dim(meta)
 
+# Save str() of every variable for reference (full variable overview/codebook)
+str_lines <- unlist(lapply(names(meta), function(v) {
+  c(paste0("== ", v, " =="), capture.output(str(meta[[v]])), "")
+}))
+writeLines(str_lines, "results/tableone/meta_str.txt")
+
+# Keep only ethnicity groups with more than n=50 samples
+drop_small_groups <- function(data, min_n = 50) {
+  data |>
+    add_count(EthnicityTotal, name = "n_group") |>
+    filter(n_group > min_n) |>
+    select(-n_group) |>
+    droplevels()
+}
+
 # Shotgun subset
-tonguemeta <- meta |> filter(!is.na(TongueSampleID)) |> droplevels()
-throatmeta <- meta |> filter(!is.na(ThroatSampleID)) |> droplevels()
+tonguemeta <- meta |> filter(!is.na(TongueSampleID)) |> droplevels() |> drop_small_groups()
+throatmeta <- meta |> filter(!is.na(ThroatSampleID)) |> droplevels() |> drop_small_groups()
 all(tonguemeta$ID %in% throatmeta$ID)
 
 vars_table1 <- c(
-  # Demografie / etniciteit
+  # Demographics
   "Sex",
   "Age_FU",
   "EthnicityTotal",
   "MigrationGen",
-  "ResidenceDuration_BA",
+  "ResidenceDuration_BA",  
 
-  # Leefstijl
+  # Cardiometabolic risk factors
   "Smoking_FU",
   "AlcoholYN_FU",
   "BMI_FU",
-
-  # Cardiometabool
   "SBP_FU",
   "DBP_FU",
   "HTSelfBP_FU",
   "DMSelfGluc_FU",
   "MetSyn_FU",
 
-  # Medicatie (microbioom-relevant)
+  # Medication
   "Antibiotics_FU",
   "Antihypertensiva_FU",
   "Lipidlowering_FU",
+  "Corticosteroids_FU",
+  "SystemicSteroids_FU",
+  "Antihistamines_FU",
+  "DecongAllerg_FU",
+  "Antidepressants_FU",
+  "Psychotropics_FU", # any psychotropic med (SSRI/SNRI, TCA, antipsychotics, anxiolytics, hypnotics, mood stabilizers, stimulants, addiction meds) - relevant due to xerostomia/dry mouth effects on oral microbiome
 
-  # Psychosociaal (optioneel maar HELIUS-typisch)
+  # Respiratory / allergy status (relevant to nose and throat microbiome)
+  "AsthmaCOPD_FU",
+
+  # Perceived Ethnic Discrimination score (only available at baseline)
   "DiscrMean_BA",
 
-  # Mond- en neushygiëne (cruciaal voor orale/nasale swabs)
+  # Mouth and nose variables
   "ToothBrushing_FU",
   "TongueBrushing_FU",
   "Mouthwash_FU",
   "OralHealth_FU",
-  "Nasal_FU"
+  "Nasal_FU", # nasal medication
+  "OwnTeeth_FU",
+  "DentistVisit_FU",
+  "DentistCavities_FU",
+  "DentistCrown_FU",
+  "DentistCheckup_FU",
+  "DentistTartar_FU",
+  "DentistInflammation_FU",
+  "DentistOther_FU",
+
+  # COVID-19 test results
+  "Cov1_ResultText",
+  "Cov2_ResultText"
 )
 
 table_one <- CreateTableOne(
@@ -66,7 +100,7 @@ write.csv(table_one_csv, "results/tableone/table_shotgun.csv", row.names = TRUE)
 
 ## 16S subset
 ps <- readRDS("data/processed/ps_throat_rarefied.RDS")
-psmeta <- as(sample_data(ps), "data.frame")
+psmeta <- as(sample_data(ps), "data.frame") |> drop_small_groups()
 
 table_one_16s <- CreateTableOne(
   vars = vars_table1,
@@ -74,5 +108,5 @@ table_one_16s <- CreateTableOne(
   data = psmeta,
   test = TRUE
 )
-table_one_16s_csv <- print(table_one_16s, nonnormal = c(""), quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
+table_one_16s_csv <- print(table_one_16s, nonnormal = c(""), quote = FALSE, noSpaces = TRUE, printToggle = FALSE, missing = TRUE)
 write.csv(table_one_16s_csv, "results/tableone/table_16S.csv", row.names = TRUE)
