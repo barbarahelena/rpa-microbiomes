@@ -8,6 +8,7 @@ version = "0.1.0"
 [tasks]
 install-bioc-data = "R -e \"BiocManager::install('GenomeInfoDbData', ask=FALSE, update=FALSE)\""
 install-decontam = "R -e \"BiocManager::install('decontam', ask=FALSE, update=FALSE)\""
+install-maaslin2 = "R -e \"BiocManager::install('Maaslin2', ask=FALSE, update=FALSE)\""
 
 [dependencies]
 bioconductor-phyloseq = { version = ">=1.50.0,<2", channel = "bioconda" }
@@ -24,3 +25,5 @@ r-ggthemes = ">=5.2.0,<6"
 r-tableone = ">=0.13.2,<0.14"
 r-circlize = ">=0.4.17,<0.5"
 r-here = ">=1.0.1,<2"
+bioconductor-edger = ">=3.28.0"
+r-vroom = ">=1.7.1,<2"
