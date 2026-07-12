@@ -7,12 +7,19 @@ library(tidyverse)
 yesno_auto <- function(x) {
   vals <- as.character(x)
   if (any(c("Nee", "Ja") %in% vals, na.rm = TRUE)) {
-    fct_recode(as.factor(x), "No" = "Nee", "Yes" = "Ja")
+    x <- fct_recode(as.factor(x), "No" = "Nee", "Yes" = "Ja")
   } else if (any(c("nee", "ja") %in% vals, na.rm = TRUE)) {
-    fct_recode(as.factor(x), "No" = "nee", "Yes" = "ja")
+    x <- fct_recode(as.factor(x), "No" = "nee", "Yes" = "ja")
+  } else if (any(c("no", "yes") %in% vals, na.rm = TRUE)) {
+    x <- fct_recode(as.factor(x), "No" = "no", "Yes" = "yes")
   } else {
-    as.factor(x)
+    x <- as.factor(x)
   }
+  # Put "Yes" as the reference level tableone displays for 2-level factors
+  if (all(c("No", "Yes") %in% levels(x))) {
+    x <- fct_relevel(x, "No", "Yes")
+  }
+  x
 }
 
 zero_one <- function(x) fct_recode(x, "No"="0", "Yes"="1")
@@ -20,10 +27,18 @@ zero_one <- function(x) fct_recode(x, "No"="0", "Yes"="1")
 ## Set working directory to project root and create output directories if needed
 setwd(here::here())
 dir.create("data/processed", recursive = TRUE, showWarnings = FALSE)
+dir.create("results/tableone", recursive = TRUE, showWarnings = FALSE)
 
 ## HELIUS data
 meta <- haven::read_sav("data/raw/250606_HELIUS data Barbara Verhaar.sav")
 names(meta)
+
+# Save str() of every raw (uncleaned) variable for reference - includes haven
+# variable labels ("label" attr) and value labels ("labels" attr) from the SPSS file
+str_lines_raw <- unlist(lapply(names(meta), function(v) {
+  c(paste0("== ", v, " =="), capture.output(str(meta[[v]])), "")
+}))
+writeLines(str_lines_raw, "results/tableone/meta_raw_str.txt")
 
 df_new <- meta |> 
     dplyr::select(
@@ -229,7 +244,7 @@ df_new2 <- df_new |>
            across(where(is.character), \(x) {
              ifelse(x %in% c("Missing", "Missing: n.v.t.", "niet ingevuld", "nvt", 
                             "No lab result", "Missing: not applicable", "missing",
-                            "Missing: not measured", 
+                            "Missing: not measured", "", "Grw",
                             "See comments lab results", "Low (<1 mmol/L)",
                             "Low (<0,08 mmol/L)", "Low (<0,10 mmol/L)",
                             "Smoking status unknown", "Number or duration unknown",
@@ -276,7 +291,11 @@ df_new2 <- df_new |>
                     "Corticosteroids_FU", "Antipsychotics_FU", "Anxiolytics_FU",
                     "Hypnotics_FU", "SSRI_SNRI_FU", "MoodStabilizers_FU", "Stimulants_FU",
                     "TCA_FU", "AddictionMeds_FU", "Psychotropics_FU", "Antidepressants_FU",
-                    "AlcoholYN_FU"), yesno_auto),
+                    "AlcoholYN_FU", "OwnTeeth_FU", "DentistVisit_FU", "DentistCavities_FU",
+                    "DentistCrown_FU", "DentistCheckup_FU", "DentistTartar_FU",
+                    "DentistInflammation_FU", "DentistOther_FU",
+                    "DecongAllerg_FU", "Antihistamines_FU", "SystemicSteroids_FU",
+                    "AsthmaCOPD_FU"), yesno_auto),
            
            # Recode Ethnicity
            EthnicityTotal = forcats::fct_recode(
@@ -298,6 +317,36 @@ df_new2 <- df_new |>
              "low (men 0-4 gl/w, women 0-2 gl/w)" = "Low (men 0-4 gl/w, women 0-2 gl/w)",
              "moderate (men 5-14 gl/w, women 3-7 gl/w)" = "Moderate (men 5-14 gl/w, women 3-7 gl/w)",
              "high (men >14 gl/w, women >7 gl/wk)" = "High (men >14 gl/w, women >7 gl/wk)"
+           ),
+
+           # Translate oral hygiene variable levels
+           ToothBrushing_FU = fct_recode(
+             ToothBrushing_FU,
+             "2x per day or more" = "2x per dag of vaker",
+             "1x per day" = "1x per dag",
+             "Less than 1x per day" = "Minder dan 1x per dag",
+             "Never" = "Nooit"
+           ),
+           TongueBrushing_FU = fct_recode(
+             TongueBrushing_FU,
+             "2x per week or more" = "2x per week of vaker",
+             "1x per week" = "1x per week",
+             "Less than 1x per week" = "Minder dan 1x per week",
+             "Never" = "Nooit"
+           ),
+           Mouthwash_FU = fct_recode(
+             Mouthwash_FU,
+             "1x per day or more" = "1x per dag of vaker",
+             "Less than 1x per day" = "Minder dan 1x per dag",
+             "Never" = "Nooit"
+           ),
+           OralHealth_FU = fct_recode(
+             OralHealth_FU,
+             "Very good" = "Heel goed",
+             "Good" = "Goed",
+             "Fair" = "Redelijk",
+             "Poor" = "Slecht",
+             "Don't know" = "Weet niet"
            ),
 
            # Strip the sample IDs to match metaphlan (without the well no)
