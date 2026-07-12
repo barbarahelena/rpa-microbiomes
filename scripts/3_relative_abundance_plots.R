@@ -98,7 +98,7 @@ ps_throat <- readRDS("data/processed/ps_throat_rarefied.RDS")
 
 process_16s <- function(ps, site_label) {
   ps_rel <- transform_sample_counts(ps, function(x) x / sum(x))
-  df <- psmelt(ps_rel) |> rename(sample_id = Sample)
+  df <- psmelt(ps_rel) |> rename(sample_id = sample)
   df$site <- site_label
   df
 }
