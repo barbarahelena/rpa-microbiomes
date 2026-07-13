@@ -130,6 +130,19 @@ walk(dup_df$message, \(x) cat(x, "\n"))
 psnoneg <- prune_samples(!sample_names(psnoneg) %in% dup_df$to_remove, psnoneg)
 sample_names(psnoneg) <- str_remove(sample_names(psnoneg), "_2")
 
+# Build cleaned taxonomy label (Tax) and ASV ID column in tax_table
+tax <- as.data.frame(tax_table(psnoneg))
+tax$Tax <- ifelse(!is.na(tax$Genus)   & !is.na(tax$Species), paste(tax$Genus, tax$Species),
+           ifelse(!is.na(tax$Genus)   &  is.na(tax$Species), paste(tax$Genus, 'spp.'),
+           ifelse(!is.na(tax$Family)  &  is.na(tax$Genus),   paste(tax$Family, 'spp.'),
+           ifelse(!is.na(tax$Order)   &  is.na(tax$Family),  paste(tax$Order, 'spp.'),
+           ifelse(!is.na(tax$Class)   &  is.na(tax$Order),   paste(tax$Class, 'spp.'),
+           ifelse(!is.na(tax$Phylum)  &  is.na(tax$Class),   paste(tax$Phylum, 'spp.'),
+           ifelse(!is.na(tax$Kingdom) &  is.na(tax$Phylum),  paste(tax$Kingdom, 'spp.'),
+           ifelse(is.na(tax$Kingdom), 'unclassified', NA))))))))
+tax$ASV <- rownames(tax)
+tax_table(psnoneg) <- as.matrix(tax)
+
 # Identify throat and nose samples
 throat_samples <- sample_names(psnoneg)[str_detect(sample_names(psnoneg), "Throat")]
 nose_samples <- sample_names(psnoneg)[str_detect(sample_names(psnoneg), "Nose")]

@@ -201,6 +201,34 @@ for (site_name in names(sites)) {
               paste0("results/differential_abundance/maaslin2_ethnicity_results_16s_",
                      site_name, ".csv"))
 
+    ## ---- Unadjusted model: ethnicity only, no confounders ----
+    ## Fitted for comparison in the forest plot below.
+    meta_maaslin_unadj <- meta |> select(EthnicityTotal)
+
+    maaslin_outdir_unadj <- paste0("results/differential_abundance/maaslin2_16s_",
+                                   site_name, "_unadjusted")
+
+    maaslin_results_unadj <- Maaslin2(
+        input_data     = counts_df,
+        input_metadata = meta_maaslin_unadj,
+        output         = maaslin_outdir_unadj,
+        fixed_effects  = "EthnicityTotal",
+        normalization  = "TSS",
+        transform      = "LOG",
+        analysis_method = "LM",
+        min_prevalence = 0.10,
+        min_abundance  = 0.0001,
+        reference      = c("EthnicityTotal,Dutch"),
+        plot_heatmap   = FALSE,
+        plot_scatter   = FALSE,
+        max_significance = 0.25
+    )
+
+    res_eth_unadj <- read_tsv(file.path(maaslin_outdir_unadj, "all_results.tsv"),
+                              show_col_types = FALSE) |>
+        filter(metadata == "EthnicityTotal", value == "South-Asian Surinamese") |>
+        select(feature, coef, stderr, pval, qval)
+
     n_sig <- sum(res_eth$qval < 0.25, na.rm = TRUE)
     n_strict <- sum(res_eth$qval < 0.05, na.rm = TRUE)
     cat(site_name, "- DA taxa (q < 0.25):", n_sig,
@@ -308,6 +336,54 @@ for (site_name in names(sites)) {
                                " (q < 0.25, n = ", nrow(mean_abund), ")"),
                  fontsize_row = 8)
         dev.off()
+
+        ## ---- Forest plot: unadjusted vs adjusted, ordered by adjusted beta ----
+        forest_df <- bind_rows(
+            top_for_heatmap |>
+                select(feature, label, coef, stderr) |>
+                mutate(model = "Adjusted"),
+            res_eth_unadj |>
+                filter(feature %in% top_for_heatmap$feature) |>
+                left_join(top_for_heatmap |> select(feature, label), by = "feature") |>
+                select(feature, label, coef, stderr) |>
+                mutate(model = "Unadjusted")
+        ) |>
+            mutate(
+                conf.low  = coef - 1.96 * stderr,
+                conf.high = coef + 1.96 * stderr
+            )
+
+        ## Order taxa by adjusted coefficient (most enriched in SAS at top)
+        taxon_order <- top_for_heatmap |> arrange(coef) |> pull(label)
+        forest_df <- forest_df |>
+            mutate(label = factor(label, levels = taxon_order),
+                   model = factor(model, levels = c("Unadjusted", "Adjusted")))
+
+        model_colours <- c("Unadjusted" = "grey50", "Adjusted" = "#E31A1C")
+
+        p_forest <- ggplot(forest_df, aes(x = label, y = coef, colour = model)) +
+            geom_hline(yintercept = 0, linetype = "dashed", colour = "grey40") +
+            geom_pointrange(aes(ymin = conf.low, ymax = conf.high),
+                            position = position_dodge(width = 0.6),
+                            size = 0.4, fatten = 1.5) +
+            coord_flip() +
+            scale_colour_manual(values = model_colours) +
+            labs(x = NULL,
+                 y = "Coefficient (South-Asian Surinamese vs Dutch, 95% CI)",
+                 colour = "Model",
+                 title = paste0("Forest plot - DA taxa - 16S ", site_name),
+                 subtitle = paste0("q < 0.25 in adjusted model (n = ",
+                                   nrow(top_for_heatmap),
+                                   "); adjusted for: ",
+                                   paste(sig_confounders, collapse = ", "))) +
+            theme_Publication() +
+            theme(legend.position = "right",
+                  axis.text.y = element_text(size = rel(0.7)),
+                  plot.subtitle = element_text(size = rel(0.55)))
+
+        ggsave(paste0("results/differential_abundance/forestplot_16s_", site_name, ".pdf"),
+               plot = p_forest, width = 8,
+               height = max(4, nrow(top_for_heatmap) * 0.3 + 2))
     }
 
     ## ---- Boxplots of top differentially abundant taxa ----
@@ -335,11 +411,13 @@ for (site_name in names(sites)) {
             mutate(label = paste0(label, "\n(q = ",
                                   formatC(qval, format = "e", digits = 1), ")"))
 
-        ggplot(box_df, aes(x = EthnicityTotal, y = rel_abund, fill = EthnicityTotal)) +
+        ## Small pseudocount so zero-abundance samples remain visible on log scale
+        ggplot(box_df, aes(x = EthnicityTotal, y = rel_abund + 1e-6, fill = EthnicityTotal)) +
             geom_boxplot(outlier.shape = 21, outlier.size = 0.5, alpha = 0.7) +
             facet_wrap(~ label, scales = "free_y") +
             scale_fill_manual(values = eth_colours) +
-            labs(x = NULL, y = "Relative abundance", fill = "Ethnicity",
+            scale_y_log10() +
+            labs(x = NULL, y = "Relative abundance (log10 scale)", fill = "Ethnicity",
                  title = paste0("Top DA taxa - 16S ", site_name, " (q < 0.05)")) +
             theme_Publication() +
             theme(axis.text.x = element_text(angle = 25, hjust = 1),
