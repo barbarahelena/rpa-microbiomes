@@ -50,11 +50,24 @@ dir.create("results/differential_abundance", recursive = TRUE, showWarnings = FA
 ## Define ethnicity colours
 eth_colours <- c("Dutch" = "#1F78B4", "South-Asian Surinamese" = "#E31A1C")
 
-## Covariates to screen as potential confounders
+## Covariates to screen as potential confounders, per site.
+## Site-specific lists follow the covariates that were significantly
+## associated with beta diversity (Bray-Curtis and/or weighted UniFrac) for
+## that site (see results/beta_diversity/covariate_screen_*_16s_<site>.csv).
+## Antibiotics_FU is not screened here: antibiotic users are excluded from
+## the analysis outright (see below) rather than adjusted for.
 ## Note: MigrationGen and ResidenceDuration_BA are excluded because they are
 ## structurally NA for all Dutch participants (migration-specific variables).
-covariates <- c("Age_FU", "Sex", "BMI_FU", "Smoking_FU", "Antibiotics_FU",
-                "ToothBrushing_FU", "TongueBrushing_FU", "Mouthwash_FU")
+covariates_list <- list(
+    throat = c("Age_FU", "Sex", "BMI_FU", "Smoking_FU", "AlcoholYN_FU",
+               "HTSelfBP_FU", "DMSelfGluc_FU", "MetSyn_FU", "Lipidlowering_FU",
+               "Antidepressants_FU", "Psychotropics_FU", "DiscrMean_BA",
+               "ToothBrushing_FU", "TongueBrushing_FU", "Mouthwash_FU",
+               "OralHealth_FU"),
+    nose = c("Age_FU", "Sex", "BMI_FU", "Smoking_FU", "AlcoholYN_FU",
+             "MetSyn_FU", "DiscrMean_BA",
+             "ToothBrushing_FU", "TongueBrushing_FU", "Mouthwash_FU")
+)
 
 ## ---- Analysis loop over sites ----
 sites <- list(
@@ -64,9 +77,16 @@ sites <- list(
 
 for (site_name in names(sites)) {
     ps <- sites[[site_name]]
+    covariates <- covariates_list[[site_name]]
 
     ## Filter to Dutch and South-Asian Surinamese only
     ps <- subset_samples(ps, EthnicityTotal %in% c("Dutch", "South-Asian Surinamese"))
+
+    ## Exclude participants on antibiotics (rather than adjusting for it)
+    n_before_abx <- nsamples(ps)
+    ps <- subset_samples(ps, Antibiotics_FU != "Yes")
+    cat(site_name, "- excluded", n_before_abx - nsamples(ps),
+        "antibiotic users\n")
 
     ## Extract metadata and drop unused factor levels
     meta <- sample_data(ps) |>
