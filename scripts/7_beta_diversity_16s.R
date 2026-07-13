@@ -50,8 +50,26 @@ eth_colours <- c("Dutch" = "#1F78B4", "South-Asian Surinamese" = "#E31A1C")
 ## Covariates to screen
 ## Note: MigrationGen and ResidenceDuration_BA are excluded because they are
 ## structurally NA for all Dutch participants (migration-specific variables).
-covariates <- c("Age_FU", "Sex", "BMI_FU", "Smoking_FU", "Antibiotics_FU",
-                "ToothBrushing_FU", "TongueBrushing_FU", "Mouthwash_FU")
+covariates <- c(
+    # Demographics
+    "Age_FU", "Sex", "BMI_FU",
+
+    # Cardiometabolic risk factors
+    "Smoking_FU", "AlcoholYN_FU", "SBP_FU", "DBP_FU",
+    "HTSelfBP_FU", "DMSelfGluc_FU", "MetSyn_FU",
+
+    # Medication
+    "Antibiotics_FU", "Antihypertensiva_FU", "Lipidlowering_FU",
+    "Corticosteroids_FU", "SystemicSteroids_FU", "Antihistamines_FU",
+    "DecongAllerg_FU", "Antidepressants_FU", "Psychotropics_FU",
+
+    # Perceived Ethnic Discrimination score (only available at baseline)
+    "DiscrMean_BA",
+
+    # Mouth and nose variables
+    "ToothBrushing_FU", "TongueBrushing_FU", "Mouthwash_FU",
+    "OralHealth_FU", "Nasal_FU"
+)
 
 ## ---- Analysis loop over sites ----
 sites <- list(
