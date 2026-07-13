@@ -89,7 +89,7 @@ eth_colours <- c(
     "Other"                  = "#B15928",  # brown
     "Ghanaian"               = "#FF7F00",  # orange
     "Turkish"                = "#E7298A",  # magenta
-    "Moroccan"               = "#A6761D"   # olive
+    "Moroccan"               = "#D4AC0D"   # gold
 )
 
 ## Generic categorical palette for the supplementary covariate-coloured PCoA
