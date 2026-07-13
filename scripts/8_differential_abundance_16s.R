@@ -50,11 +50,34 @@ dir.create("results/differential_abundance", recursive = TRUE, showWarnings = FA
 ## Define ethnicity colours
 eth_colours <- c("Dutch" = "#1F78B4", "South-Asian Surinamese" = "#E31A1C")
 
-## Covariates to screen as potential confounders
+## Shorten covariate names for plot subtitles (drop trailing _FU/_BA suffix)
+## and wrap long lists onto multiple lines instead of running off the page.
+format_covariates <- function(covs, width = 70) {
+    covs |>
+        gsub("_(FU|BA)$", "", x = _) |>
+        paste(collapse = ", ") |>
+        str_wrap(width = width)
+}
+
+## Covariates to screen as potential confounders, per site.
+## Site-specific lists follow the covariates that were significantly
+## associated with beta diversity (Bray-Curtis and/or weighted UniFrac) for
+## that site (see results/beta_diversity/covariate_screen_*_16s_<site>.csv).
+## Antibiotics_FU is not screened here: antibiotic users are excluded from
+## the analysis outright (see below) rather than adjusted for.
 ## Note: MigrationGen and ResidenceDuration_BA are excluded because they are
 ## structurally NA for all Dutch participants (migration-specific variables).
-covariates <- c("Age_FU", "Sex", "BMI_FU", "Smoking_FU", "Antibiotics_FU",
-                "ToothBrushing_FU", "TongueBrushing_FU", "Mouthwash_FU")
+## DiscrMean_BA is excluded because it was only measured at baseline.
+covariates_list <- list(
+    throat = c("Age_FU", "Sex", "BMI_FU", "Smoking_FU", "AlcoholYN_FU",
+               "HTSelfBP_FU", "DMSelfGluc_FU", "MetSyn_FU", "Lipidlowering_FU",
+               "Antidepressants_FU", "Psychotropics_FU",
+               "ToothBrushing_FU", "TongueBrushing_FU", "Mouthwash_FU",
+               "OralHealth_FU"),
+    nose = c("Age_FU", "Sex", "BMI_FU", "Smoking_FU", "AlcoholYN_FU",
+             "MetSyn_FU",
+             "ToothBrushing_FU", "TongueBrushing_FU", "Mouthwash_FU")
+)
 
 ## ---- Analysis loop over sites ----
 sites <- list(
@@ -64,9 +87,16 @@ sites <- list(
 
 for (site_name in names(sites)) {
     ps <- sites[[site_name]]
+    covariates <- covariates_list[[site_name]]
 
     ## Filter to Dutch and South-Asian Surinamese only
     ps <- subset_samples(ps, EthnicityTotal %in% c("Dutch", "South-Asian Surinamese"))
+
+    ## Exclude participants on antibiotics (rather than adjusting for it)
+    n_before_abx <- nsamples(ps)
+    ps <- subset_samples(ps, Antibiotics_FU != "Yes")
+    cat(site_name, "- excluded", n_before_abx - nsamples(ps),
+        "antibiotic users\n")
 
     ## Extract metadata and drop unused factor levels
     meta <- sample_data(ps) |>
@@ -181,6 +211,34 @@ for (site_name in names(sites)) {
               paste0("results/differential_abundance/maaslin2_ethnicity_results_16s_",
                      site_name, ".csv"))
 
+    ## ---- Unadjusted model: ethnicity only, no confounders ----
+    ## Fitted for comparison in the forest plot below.
+    meta_maaslin_unadj <- meta |> select(EthnicityTotal)
+
+    maaslin_outdir_unadj <- paste0("results/differential_abundance/maaslin2_16s_",
+                                   site_name, "_unadjusted")
+
+    maaslin_results_unadj <- Maaslin2(
+        input_data     = counts_df,
+        input_metadata = meta_maaslin_unadj,
+        output         = maaslin_outdir_unadj,
+        fixed_effects  = "EthnicityTotal",
+        normalization  = "TSS",
+        transform      = "LOG",
+        analysis_method = "LM",
+        min_prevalence = 0.10,
+        min_abundance  = 0.0001,
+        reference      = c("EthnicityTotal,Dutch"),
+        plot_heatmap   = FALSE,
+        plot_scatter   = FALSE,
+        max_significance = 0.25
+    )
+
+    res_eth_unadj <- read_tsv(file.path(maaslin_outdir_unadj, "all_results.tsv"),
+                              show_col_types = FALSE) |>
+        filter(metadata == "EthnicityTotal", value == "South-Asian Surinamese") |>
+        select(feature, coef, stderr, pval, qval)
+
     n_sig <- sum(res_eth$qval < 0.25, na.rm = TRUE)
     n_strict <- sum(res_eth$qval < 0.05, na.rm = TRUE)
     cat(site_name, "- DA taxa (q < 0.25):", n_sig,
@@ -198,10 +256,9 @@ for (site_name in names(sites)) {
                 qval < 0.25 ~ "q < 0.25",
                 TRUE ~ "NS"
             ),
-            ## Use Genus for labelling, fall back to Family
+            ## Use the cleaned taxonomy label (built in 1b_datacleaning_biome.R)
             label = case_when(
-                !is.na(Genus) & Genus != "" ~ Genus,
-                !is.na(Family) & Family != "" ~ Family,
+                !is.na(Tax) & Tax != "" ~ Tax,
                 TRUE ~ feature
             )
         ) |>
@@ -222,11 +279,11 @@ for (site_name in names(sites)) {
              y = expression(-log[10](q-value)),
              colour = "Significance",
              title = paste0("Differential abundance - 16S ", site_name),
-             subtitle = paste0("MaAsLin2, adjusted for: ",
-                               paste(sig_confounders, collapse = ", "))) +
+             subtitle = paste0("MaAsLin2, adjusted for:\n",
+                               format_covariates(sig_confounders))) +
         theme_Publication() +
         theme(legend.position = "right",
-              plot.subtitle = element_text(size = rel(0.6)))
+              plot.subtitle = element_text(size = rel(0.5)))
 
     ## Add labels for top significant taxa
     top_taxa <- res_eth |>
@@ -290,6 +347,85 @@ for (site_name in names(sites)) {
         dev.off()
     }
 
+    ## ---- Forest plot: unadjusted vs adjusted, ordered by adjusted beta ----
+    ## Taxa significant (q < 0.05) in the adjusted model; unadjusted estimates
+    ## are shown alongside for comparison.
+    sig_features <- res_eth |> filter(qval < 0.05) |> pull(feature)
+
+    if (length(sig_features) > 0) {
+        sig_taxa <- res_eth |> filter(feature %in% sig_features)
+
+        forest_df <- bind_rows(
+            sig_taxa |>
+                select(feature, label, coef, stderr) |>
+                mutate(model = "Adjusted"),
+            res_eth_unadj |>
+                filter(feature %in% sig_features) |>
+                left_join(sig_taxa |> select(feature, label), by = "feature") |>
+                select(feature, label, coef, stderr) |>
+                mutate(model = "Unadjusted")
+        ) |>
+            mutate(
+                conf.low  = coef - 1.96 * stderr,
+                conf.high = coef + 1.96 * stderr
+            )
+
+        ## Order taxa by adjusted coefficient, most enriched in SAS first
+        ## (highest coef), most depleted last (lowest coef).
+        taxon_order <- sig_taxa |> arrange(desc(coef)) |> pull(label)
+        forest_df <- forest_df |>
+            mutate(label = factor(label, levels = taxon_order),
+                   model = factor(model, levels = c("Unadjusted", "Adjusted")))
+
+        model_colours <- c("Unadjusted" = "grey50", "Adjusted" = "#E31A1C")
+
+        ## Paginate: a single page is capped at 50 inches by ggsave/pdf, so
+        ## split into pages of at most 70 taxa (~23 in tall) when the
+        ## significant set is large, keeping every taxon in the output.
+        max_per_page <- 70
+        n_total <- length(taxon_order)
+        n_pages <- ceiling(n_total / max_per_page)
+
+        pdf(paste0("results/differential_abundance/forestplot_16s_", site_name, ".pdf"),
+            width = 8, height = max(4, min(max_per_page, n_total) * 0.3 + 2))
+
+        for (page in seq_len(n_pages)) {
+            idx_start <- (page - 1) * max_per_page + 1
+            idx_end   <- min(page * max_per_page, n_total)
+            ## taxon_order is highest-to-lowest; reverse each page's slice so
+            ## that after coord_flip() the highest value still lands at the
+            ## top of the page (coord_flip puts the LAST factor level on top)
+            page_taxa <- rev(taxon_order[idx_start:idx_end])
+
+            page_df <- forest_df |>
+                filter(label %in% page_taxa) |>
+                mutate(label = factor(label, levels = page_taxa))
+
+            p_forest <- ggplot(page_df, aes(x = label, y = coef, colour = model)) +
+                geom_hline(yintercept = 0, linetype = "dashed", colour = "grey40") +
+                geom_pointrange(aes(ymin = conf.low, ymax = conf.high),
+                                position = position_dodge(width = 0.6),
+                                size = 0.4, fatten = 1.5) +
+                coord_flip() +
+                scale_colour_manual(values = model_colours) +
+                labs(x = NULL,
+                     y = "Coefficient (South-Asian Surinamese vs Dutch, 95% CI)",
+                     colour = "Model",
+                     title = paste0("Forest plot differential abundant ASVs ", site_name,
+                                    " (page ", page, "/", n_pages, ")"),
+                     subtitle = paste0("q < 0.05 in adjusted model (n = ",
+                                       n_total, " total)\nAdjusted for: ",
+                                       format_covariates(sig_confounders))) +
+                theme_Publication() +
+                theme(legend.position = "right",
+                      axis.text.y = element_text(size = rel(0.7)),
+                      plot.subtitle = element_text(size = rel(0.55)))
+
+            print(p_forest)
+        }
+        dev.off()
+    }
+
     ## ---- Boxplots of top differentially abundant taxa ----
     if (n_strict > 0) {
         top_box <- res_eth |>
@@ -315,11 +451,13 @@ for (site_name in names(sites)) {
             mutate(label = paste0(label, "\n(q = ",
                                   formatC(qval, format = "e", digits = 1), ")"))
 
-        ggplot(box_df, aes(x = EthnicityTotal, y = rel_abund, fill = EthnicityTotal)) +
+        ## Small pseudocount so zero-abundance samples remain visible on log scale
+        ggplot(box_df, aes(x = EthnicityTotal, y = rel_abund + 1e-6, fill = EthnicityTotal)) +
             geom_boxplot(outlier.shape = 21, outlier.size = 0.5, alpha = 0.7) +
             facet_wrap(~ label, scales = "free_y") +
             scale_fill_manual(values = eth_colours) +
-            labs(x = NULL, y = "Relative abundance", fill = "Ethnicity",
+            scale_y_log10() +
+            labs(x = NULL, y = "Relative abundance (log10 scale)", fill = "Ethnicity",
                  title = paste0("Top DA taxa - 16S ", site_name, " (q < 0.05)")) +
             theme_Publication() +
             theme(axis.text.x = element_text(angle = 25, hjust = 1),
