@@ -63,9 +63,6 @@ covariates <- c(
     "Corticosteroids_FU", "SystemicSteroids_FU", "Antihistamines_FU",
     "DecongAllerg_FU", "Antidepressants_FU", "Psychotropics_FU",
 
-    # Perceived Ethnic Discrimination score (only available at baseline)
-    "DiscrMean_BA",
-
     # Mouth and nose variables
     "ToothBrushing_FU", "TongueBrushing_FU", "Mouthwash_FU",
     "OralHealth_FU", "Nasal_FU"
