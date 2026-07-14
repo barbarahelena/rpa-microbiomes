@@ -119,14 +119,36 @@ pal_base["Other"] <- "#CCCCCC"
 if ("Unclassified" %in% names(pal_base)) pal_base["Unclassified"] <- "#999999"
 
 ggplot(df_16s_phylum, aes(x = site, y = mean_abund, fill = taxon)) +
-  geom_col(position = "stack", width = 0.6) +
+  geom_col(position = position_stack(reverse = TRUE), width = 0.6) +
   scale_fill_manual(values = pal_base) +
-  scale_y_continuous(labels = scales::percent_format(), limits = c(0, 1), expand = c(0, 0)) +
+  scale_y_continuous(labels = scales::percent_format(), expand = c(0, 0)) +
+  coord_cartesian(ylim = c(0, 1)) +
   labs(x = NULL, y = "Mean relative abundance", fill = "Phylum",
        title = "16S rRNA - Phylum-level composition") +
   theme_Publication() +
   guides(fill = guide_legend(ncol = 2))
 ggsave("results/composition/16s_phylum_composition.pdf", width = 6, height = 6)
+
+# Family-level plot
+df_16s_family <- prep_abundance(df_16s, "Family", top_n = 12, group_col = "site")
+
+n_taxa_f <- length(levels(df_16s_family$taxon))
+pal_family <- c(RColorBrewer::brewer.pal(min(n_taxa_f, 12), "Paired"))
+if (n_taxa_f > 12) pal_family <- c(pal_family, colorRampPalette(c("#66C2A5", "#FC8D62", "#8DA0CB"))(n_taxa_f - 12))
+names(pal_family) <- levels(df_16s_family$taxon)
+pal_family["Other"] <- "#CCCCCC"
+if ("Unclassified" %in% names(pal_family)) pal_family["Unclassified"] <- "#999999"
+
+ggplot(df_16s_family, aes(x = site, y = mean_abund, fill = taxon)) +
+  geom_col(position = position_stack(reverse = TRUE), width = 0.6) +
+  scale_fill_manual(values = pal_family) +
+  scale_y_continuous(labels = scales::percent_format(), expand = c(0, 0)) +
+  coord_cartesian(ylim = c(0, 1)) +
+  labs(x = NULL, y = "Mean relative abundance", fill = "Family",
+       title = "16S rRNA - Family-level composition") +
+  theme_Publication() +
+  guides(fill = guide_legend(ncol = 2))
+ggsave("results/composition/16s_family_composition.pdf", width = 7, height = 7)
 
 # Genus-level plot
 df_16s_genus <- prep_abundance(df_16s, "Genus", top_n = 15, group_col = "site")
@@ -139,9 +161,10 @@ pal_genus["Other"] <- "#CCCCCC"
 if ("Unclassified" %in% names(pal_genus)) pal_genus["Unclassified"] <- "#999999"
 
 ggplot(df_16s_genus, aes(x = site, y = mean_abund, fill = taxon)) +
-  geom_col(position = "stack", width = 0.6) +
+  geom_col(position = position_stack(reverse = TRUE), width = 0.6) +
   scale_fill_manual(values = pal_genus) +
-  scale_y_continuous(labels = scales::percent_format(), limits = c(0, 1), expand = c(0, 0)) +
+  scale_y_continuous(labels = scales::percent_format(), expand = c(0, 0)) +
+  coord_cartesian(ylim = c(0, 1)) +
   labs(x = NULL, y = "Mean relative abundance", fill = "Genus",
        title = "16S rRNA - Genus-level composition") +
   theme_Publication() +
@@ -164,7 +187,7 @@ process_shotgun <- function(shotgun_obj, site_label) {
   counts_long$Abundance <- replace_na(counts_long$Abundance, 0) / 100
 
   # Join taxonomy
-  tax <- shotgun_obj$tax_table |> select(Species, Phylum, Genus)
+  tax <- shotgun_obj$tax_table |> select(Species, Phylum, Family, Genus)
   counts_long <- counts_long |> left_join(tax, by = "Species")
 
   # Join ethnicity
@@ -196,9 +219,10 @@ pal_sg["Other"] <- "#CCCCCC"
 if ("Unclassified" %in% names(pal_sg)) pal_sg["Unclassified"] <- "#999999"
 
 ggplot(df_sg_throat_phy, aes(x = EthnicityTotal, y = mean_abund, fill = taxon)) +
-  geom_col(position = "stack", width = 0.6) +
+  geom_col(position = position_stack(reverse = TRUE), width = 0.6) +
   scale_fill_manual(values = pal_sg) +
-  scale_y_continuous(labels = scales::percent_format(), limits = c(0, 1), expand = c(0, 0)) +
+  scale_y_continuous(labels = scales::percent_format(), expand = c(0, 0)) +
+  coord_cartesian(ylim = c(0, 1)) +
   labs(x = NULL, y = "Mean relative abundance", fill = "Phylum",
        title = "Shotgun metagenomics - Throat (Phylum)") +
   theme_Publication() +
@@ -215,14 +239,57 @@ pal_sg_tongue["Other"] <- "#CCCCCC"
 if ("Unclassified" %in% names(pal_sg_tongue)) pal_sg_tongue["Unclassified"] <- "#999999"
 
 ggplot(df_sg_tongue_phy, aes(x = EthnicityTotal, y = mean_abund, fill = taxon)) +
-  geom_col(position = "stack", width = 0.6) +
+  geom_col(position = position_stack(reverse = TRUE), width = 0.6) +
   scale_fill_manual(values = pal_sg_tongue) +
-  scale_y_continuous(labels = scales::percent_format(), limits = c(0, 1), expand = c(0, 0)) +
+  scale_y_continuous(labels = scales::percent_format(), expand = c(0, 0)) +
+  coord_cartesian(ylim = c(0, 1)) +
   labs(x = NULL, y = "Mean relative abundance", fill = "Phylum",
        title = "Shotgun metagenomics - Tongue (Phylum)") +
   theme_Publication() +
   guides(fill = guide_legend(ncol = 2))
 ggsave("results/composition/shotgun_phylum_tongue.pdf", width = 6, height = 6)
+
+# Shotgun throat - Family
+df_sg_throat_fam <- prep_abundance(df_shotgun_throat, "Family", top_n = 12, group_col = "EthnicityTotal")
+
+n_taxa_sg_f <- length(levels(df_sg_throat_fam$taxon))
+pal_sg_f <- c(RColorBrewer::brewer.pal(min(n_taxa_sg_f, 12), "Paired"))
+if (n_taxa_sg_f > 12) pal_sg_f <- c(pal_sg_f, colorRampPalette(c("#66C2A5", "#FC8D62", "#8DA0CB"))(n_taxa_sg_f - 12))
+names(pal_sg_f) <- levels(df_sg_throat_fam$taxon)
+pal_sg_f["Other"] <- "#CCCCCC"
+if ("Unclassified" %in% names(pal_sg_f)) pal_sg_f["Unclassified"] <- "#999999"
+
+ggplot(df_sg_throat_fam, aes(x = EthnicityTotal, y = mean_abund, fill = taxon)) +
+  geom_col(position = position_stack(reverse = TRUE), width = 0.6) +
+  scale_fill_manual(values = pal_sg_f) +
+  scale_y_continuous(labels = scales::percent_format(), expand = c(0, 0)) +
+  coord_cartesian(ylim = c(0, 1)) +
+  labs(x = NULL, y = "Mean relative abundance", fill = "Family",
+       title = "Shotgun metagenomics - Throat (Family)") +
+  theme_Publication() +
+  guides(fill = guide_legend(ncol = 2))
+ggsave("results/composition/shotgun_family_throat.pdf", width = 7, height = 7)
+
+# Shotgun tongue - Family
+df_sg_tongue_fam <- prep_abundance(df_shotgun_tongue, "Family", top_n = 12, group_col = "EthnicityTotal")
+
+n_taxa_sg_tf <- length(levels(df_sg_tongue_fam$taxon))
+pal_sg_tf <- c(RColorBrewer::brewer.pal(min(n_taxa_sg_tf, 12), "Paired"))
+if (n_taxa_sg_tf > 12) pal_sg_tf <- c(pal_sg_tf, colorRampPalette(c("#66C2A5", "#FC8D62", "#8DA0CB"))(n_taxa_sg_tf - 12))
+names(pal_sg_tf) <- levels(df_sg_tongue_fam$taxon)
+pal_sg_tf["Other"] <- "#CCCCCC"
+if ("Unclassified" %in% names(pal_sg_tf)) pal_sg_tf["Unclassified"] <- "#999999"
+
+ggplot(df_sg_tongue_fam, aes(x = EthnicityTotal, y = mean_abund, fill = taxon)) +
+  geom_col(position = position_stack(reverse = TRUE), width = 0.6) +
+  scale_fill_manual(values = pal_sg_tf) +
+  scale_y_continuous(labels = scales::percent_format(), expand = c(0, 0)) +
+  coord_cartesian(ylim = c(0, 1)) +
+  labs(x = NULL, y = "Mean relative abundance", fill = "Family",
+       title = "Shotgun metagenomics - Tongue (Family)") +
+  theme_Publication() +
+  guides(fill = guide_legend(ncol = 2))
+ggsave("results/composition/shotgun_family_tongue.pdf", width = 7, height = 7)
 
 # Shotgun throat - Genus
 df_sg_throat_gen <- prep_abundance(df_shotgun_throat, "Genus", top_n = 15, group_col = "EthnicityTotal")
@@ -235,9 +302,10 @@ pal_sg_g["Other"] <- "#CCCCCC"
 if ("Unclassified" %in% names(pal_sg_g)) pal_sg_g["Unclassified"] <- "#999999"
 
 ggplot(df_sg_throat_gen, aes(x = EthnicityTotal, y = mean_abund, fill = taxon)) +
-  geom_col(position = "stack", width = 0.6) +
+  geom_col(position = position_stack(reverse = TRUE), width = 0.6) +
   scale_fill_manual(values = pal_sg_g) +
-  scale_y_continuous(labels = scales::percent_format(), limits = c(0, 1), expand = c(0, 0)) +
+  scale_y_continuous(labels = scales::percent_format(), expand = c(0, 0)) +
+  coord_cartesian(ylim = c(0, 1)) +
   labs(x = NULL, y = "Mean relative abundance", fill = "Genus",
        title = "Shotgun metagenomics - Throat (Genus)") +
   theme_Publication() +
@@ -255,9 +323,10 @@ pal_sg_tg["Other"] <- "#CCCCCC"
 if ("Unclassified" %in% names(pal_sg_tg)) pal_sg_tg["Unclassified"] <- "#999999"
 
 ggplot(df_sg_tongue_gen, aes(x = EthnicityTotal, y = mean_abund, fill = taxon)) +
-  geom_col(position = "stack", width = 0.6) +
+  geom_col(position = position_stack(reverse = TRUE), width = 0.6) +
   scale_fill_manual(values = pal_sg_tg) +
-  scale_y_continuous(labels = scales::percent_format(), limits = c(0, 1), expand = c(0, 0)) +
+  scale_y_continuous(labels = scales::percent_format(), expand = c(0, 0)) +
+  coord_cartesian(ylim = c(0, 1)) +
   labs(x = NULL, y = "Mean relative abundance", fill = "Genus",
        title = "Shotgun metagenomics - Tongue (Genus)") +
   theme_Publication() +
