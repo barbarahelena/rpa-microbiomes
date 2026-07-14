@@ -553,9 +553,12 @@ run_da_pair <- function(ps_site, site_name, group1, group2, sig_confounders, out
             theme_Publication() +
             theme(axis.text.x = element_text(angle = 25, hjust = 1),
                   strip.text = element_text(size = rel(0.6)))
+        ## Larger canvas than the panel count strictly needs, so the (often
+        ## long) two-line taxon + q-value strip labels have room at the same
+        ## font size instead of being truncated/overlapping.
         ggsave(file.path(outdir, "boxplots",
                         paste0("boxplots_top_da_16s_", site_name, "_", pair_tag, ".pdf")),
-               width = 10, height = 8)
+               width = 16, height = 11)
     }
 
     cat("Completed:", site_name, pair_tag, "\n")
