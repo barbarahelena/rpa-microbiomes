@@ -52,35 +52,8 @@ test_n <- suppressWarnings(as.integer(Sys.getenv("BETA_DIV_TEST_N", "")))
 outdir <- if (!is.na(test_n)) "results/beta_diversity_test" else "results/beta_diversity"
 if (!is.na(test_n)) cat("TEST MODE: capping each group at", test_n, "samples, writing to", outdir, "\n")
 
-for (sub in c("pcoa", "permanova", "covariate_screen", "betadisper", "cache")) {
+for (sub in c("pcoa", "permanova", "covariate_screen", "betadisper")) {
     dir.create(file.path(outdir, sub), recursive = TRUE, showWarnings = FALSE)
-}
-
-## Cache: the distance matrices and every 999-permutation PERMANOVA/betadisper
-## call in this script are expensive, but most edits to this script only
-## touch a downstream plot or table format. read_or_compute() loads a cached
-## RDS instead of recomputing when one already exists at cache_file, so
-## adding something new (like the pairwise heatmap below) doesn't require
-## sitting through the full runtime again.
-## IMPORTANT: this cache is NOT auto-invalidated if you change the group
-## threshold, the covariates list, or the input data - delete <outdir>/cache/
-## (or set BETA_DIV_FORCE_RECOMPUTE=1 for one run) after any such change.
-force_recompute <- isTRUE(as.logical(Sys.getenv("BETA_DIV_FORCE_RECOMPUTE", "FALSE")))
-if (force_recompute) cat("BETA_DIV_FORCE_RECOMPUTE=1 - ignoring any cached results\n")
-
-## Cached results depend on test_n (a different sample subset each time it
-## changes), so key the cache filename on it to avoid silently loading a
-## stale cache computed under a different BETA_DIV_TEST_N value.
-cache_suffix <- if (!is.na(test_n)) paste0("_testN", test_n) else ""
-
-read_or_compute <- function(cache_file, compute_fn) {
-    if (file.exists(cache_file) && !force_recompute) {
-        cat("  [cache hit]", basename(cache_file), "\n")
-        return(readRDS(cache_file))
-    }
-    result <- compute_fn()
-    saveRDS(result, cache_file)
-    result
 }
 
 ## Number of cores for parallelizing independent PERMANOVA calls (covariate
@@ -150,8 +123,7 @@ pairwise_permanova <- function(dist_mat, meta, group_var = "EthnicityTotal", n_c
 }
 
 ## Bundles every permutation-heavy PERMANOVA/betadisper call for one site x
-## distance-metric combination into a single object, so it can be cached as
-## one unit via read_or_compute() (see above).
+## distance-metric combination into a single object.
 compute_permanova_block <- function(dist_mat, meta, covariates, n_cores) {
     ## ---- PERMANOVA: ethnicity only (omnibus across all groups) ----
     permanova_eth <- adonis2(
@@ -323,12 +295,9 @@ for (site_name in names(sites)) {
     cat("Groups (N>50) for", site_name, ":", paste(group_ns$EthnicityTotal, collapse = ", "), "\n")
 
     ## ---- Compute distance matrices ----
-    distances <- read_or_compute(
-        file.path(outdir, "cache", paste0("distances_16s_", site_name, cache_suffix, ".rds")),
-        function() list(
-            "Bray-Curtis"      = phyloseq::distance(ps, method = "bray"),
-            "Weighted UniFrac" = phyloseq::distance(ps, method = "wunifrac")
-        )
+    distances <- list(
+        "Bray-Curtis"      = phyloseq::distance(ps, method = "bray"),
+        "Weighted UniFrac" = phyloseq::distance(ps, method = "wunifrac")
     )
 
     ## Collects ethnicity + covariate PERMANOVA R2/p from both distance
@@ -341,14 +310,9 @@ for (site_name in names(sites)) {
 
         ## ---- PERMANOVA (omnibus + pairwise), covariate screen, betadisper ----
         ## Every 999-permutation call for this site x distance combination is
-        ## bundled into one cached object (see read_or_compute() above) -
-        ## the single most expensive step in this script.
-        block <- read_or_compute(
-            file.path(outdir, "cache",
-                      paste0("permanova_block_", dist_label, "_16s_",
-                             site_name, cache_suffix, ".rds")),
-            function() compute_permanova_block(dist_mat, meta, covariates, n_cores)
-        )
+        ## bundled into one object - the single most expensive step in this
+        ## script.
+        block <- compute_permanova_block(dist_mat, meta, covariates, n_cores)
         permanova_eth      <- block$permanova_eth
         permanova_pairwise <- block$permanova_pairwise
         covariate_screen   <- block$covariate_screen
