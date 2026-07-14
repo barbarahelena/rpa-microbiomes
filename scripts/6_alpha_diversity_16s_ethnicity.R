@@ -1,6 +1,6 @@
 ## Alpha diversity analysis: 16S microbiome (throat and nose)
-## Stratified by ethnicity (Dutch vs South-Asian Surinamese)
-## with Wilcoxon tests and covariate-adjusted linear regression
+## Stratified by ethnicity (all groups with N > 50 per site)
+## with Kruskal-Wallis (+ pairwise Wilcoxon) and covariate-adjusted regression
 
 ## Libraries
 library(here)
@@ -45,8 +45,24 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 setwd(here::here())
 dir.create("results/alpha_diversity", recursive = TRUE, showWarnings = FALSE)
 
-## Define ethnicity colours and covariates
-eth_colours <- c("Dutch" = "#1F78B4", "South-Asian Surinamese" = "#E31A1C")
+## Define ethnicity colours (same validated palette as scripts 7 and 8, so a
+## given ethnicity is always the same colour across every figure)
+eth_colours <- c(
+    "Dutch"                  = "#1F78B4",  # blue
+    "South-Asian Surinamese" = "#E31A1C",  # red
+    "African Surinamese"     = "#33A02C",  # green
+    "Javanese Surinamese"    = "#6A3D9A",  # purple
+    "Other"                  = "#B15928",  # brown
+    "Ghanaian"               = "#FF7F00",  # orange
+    "Turkish"                = "#E7298A",  # magenta
+    "Moroccan"               = "#D4AC0D"   # gold
+)
+
+## Keep only ethnicity groups with more than n=50 samples (matches Table 1)
+keep_groups <- function(ps, min_n = 50) {
+    counts <- table(sample_data(ps)$EthnicityTotal)
+    names(counts)[counts > min_n]
+}
 
 ## Covariates for linear regression
 ## Note: MigrationGen and ResidenceDuration_BA are excluded because they are
@@ -89,8 +105,8 @@ for (site_name in names(sites)) {
     ps <- sites[[site_name]]
     rare_depth <- rarefaction_depths[[site_name]]
 
-    ## Filter to Dutch and South-Asian Surinamese only
-    ps <- subset_samples(ps, EthnicityTotal %in% c("Dutch", "South-Asian Surinamese"))
+    ## Filter to ethnicity groups with N > 50 in this site
+    ps <- subset_samples(ps, EthnicityTotal %in% keep_groups(ps))
 
     ## Compute alpha diversity metrics
     alpha_df <- estimate_richness(ps, measures = c("Observed", "Shannon", "Simpson")) |>
@@ -108,8 +124,8 @@ for (site_name in names(sites)) {
         filter(!is.na(EthnicityTotal))
 
     n_samples <- nrow(alpha_df)
-    n_dutch <- sum(alpha_df$EthnicityTotal == "Dutch")
-    n_sas <- sum(alpha_df$EthnicityTotal == "South-Asian Surinamese")
+    group_ns <- alpha_df |> count(EthnicityTotal, name = "n") |> arrange(desc(n))
+    cat("Groups (N>50) for", site_name, ":", paste(group_ns$EthnicityTotal, collapse = ", "), "\n")
 
     ## Long format for plotting and summaries
     alpha_long <- alpha_df |>
@@ -134,41 +150,88 @@ for (site_name in names(sites)) {
               paste0("results/alpha_diversity/alpha_diversity_summary_16s_",
                      site_name, "_ethnicity.csv"))
 
-    ## ---- Wilcoxon rank-sum tests ----
-    wilcox_results <- alpha_long |>
+    ## ---- Kruskal-Wallis omnibus test across all groups ----
+    kruskal_results <- alpha_long |>
         group_by(metric) |>
         summarise(
-            W        = wilcox.test(value ~ EthnicityTotal)$statistic,
-            p.value  = wilcox.test(value ~ EthnicityTotal)$p.value,
-            .groups  = "drop"
+            statistic = kruskal.test(value ~ EthnicityTotal)$statistic,
+            p.value   = kruskal.test(value ~ EthnicityTotal)$p.value,
+            .groups   = "drop"
         )
-    write_csv(wilcox_results,
-              paste0("results/alpha_diversity/alpha_diversity_wilcoxon_16s_",
+    write_csv(kruskal_results,
+              paste0("results/alpha_diversity/alpha_diversity_kruskal_16s_",
+                     site_name, ".csv"))
+
+    ## ---- Pairwise Wilcoxon rank-sum tests between every pair of groups ----
+    pairwise_results <- alpha_long |>
+        group_by(metric) |>
+        group_modify(~ {
+            pw <- pairwise.wilcox.test(.x$value, .x$EthnicityTotal, p.adjust.method = "BH")
+            as.data.frame(as.table(pw$p.value)) |>
+                filter(!is.na(Freq)) |>
+                rename(group1 = Var1, group2 = Var2, p.adj = Freq)
+        }) |>
+        ungroup()
+    write_csv(pairwise_results,
+              paste0("results/alpha_diversity/alpha_diversity_pairwise_wilcoxon_16s_",
                      site_name, ".csv"))
 
     ## ---- Boxplots by ethnicity (primary figure) ----
-    subtitle_text <- paste0("Dutch (n = ", n_dutch,
-                            ") vs South-Asian Surinamese (n = ", n_sas, ")")
+    ## Kruskal-Wallis omnibus p-value per facet, plus brackets for pairwise
+    ## Wilcoxon (BH-adjusted) comparisons with p.adj < 0.05 only - with up to
+    ## 15 (throat) or 10 (nose) possible pairs, showing every pair would be
+    ## unreadable. Full pairwise results (significant or not) are always in
+    ## the CSV regardless of what gets plotted.
+    metric_range <- alpha_long |>
+        group_by(metric) |>
+        summarise(max_val = max(value), min_val = min(value), .groups = "drop")
 
-    ggplot(alpha_long, aes(x = EthnicityTotal, y = value, fill = EthnicityTotal)) +
+    sig_pairs <- pairwise_results |>
+        filter(p.adj < 0.05) |>
+        left_join(metric_range, by = "metric") |>
+        group_by(metric) |>
+        arrange(p.adj) |>
+        mutate(
+            group1 = as.character(group1),
+            group2 = as.character(group2),
+            step = (max_val - min_val) * 0.12,
+            y.position = max_val + step * row_number(),
+            p.adj.label = case_when(
+                p.adj < 0.0001 ~ "****",
+                p.adj < 0.001  ~ "***",
+                p.adj < 0.01   ~ "**",
+                TRUE           ~ "*"
+            )
+        ) |>
+        ungroup()
+
+    p_box <- ggplot(alpha_long, aes(x = EthnicityTotal, y = value, fill = EthnicityTotal)) +
         geom_boxplot(outlier.shape = 21, outlier.size = 0.8, alpha = 0.7) +
-        stat_compare_means(method = "wilcox.test", label = "p.signif",
-                           comparisons = list(c("Dutch", "South-Asian Surinamese"))) +
+        stat_compare_means(method = "kruskal.test", label = "p.format") +
         facet_wrap(~ metric, scales = "free_y", nrow = 1) +
         scale_fill_manual(values = eth_colours) +
         labs(x = NULL, y = "Value", fill = "Ethnicity",
              title = paste0("Alpha diversity by ethnicity - 16S ", site_name),
-             subtitle = subtitle_text,
              caption = paste0("Rarefied to ", format(rare_depth, big.mark = ","),
-                              " reads/sample. Wilcoxon rank-sum test: ",
-                              "ns p > 0.05, * p < 0.05, ** p < 0.01, ",
-                              "*** p < 0.001, **** p < 0.0001")) +
-        scale_y_continuous(expand = expansion(mult = c(0.05, 0.15))) +
+                              " reads/sample. Kruskal-Wallis omnibus test across all groups; ",
+                              "brackets show pairwise Wilcoxon (BH-adjusted) p < 0.05 only - ",
+                              "full pairwise results in results CSV.")) +
+        scale_y_continuous(expand = expansion(mult = c(0.05, 0.2))) +
+        guides(fill = guide_legend(nrow = 2, byrow = TRUE)) +
         theme_Publication() +
         theme(axis.text.x = element_text(angle = 25, hjust = 1))
+
+    if (nrow(sig_pairs) > 0) {
+        p_box <- p_box +
+            ggpubr::stat_pvalue_manual(sig_pairs, label = "p.adj.label",
+                                        xmin = "group1", xmax = "group2",
+                                        y.position = "y.position",
+                                        tip.length = 0.01, size = 3)
+    }
+
     ggsave(paste0("results/alpha_diversity/alpha_diversity_boxplot_16s_",
                   site_name, "_ethnicity.pdf"),
-           width = 10, height = 5)
+           plot = p_box, width = 12, height = 6.5)
 
     ## ---- Violin + boxplot (distribution overview) ----
     ggplot(alpha_long, aes(x = EthnicityTotal, y = value, fill = EthnicityTotal)) +
@@ -179,14 +242,14 @@ for (site_name in names(sites)) {
         scale_fill_manual(values = eth_colours) +
         labs(x = NULL, y = "Value", fill = "Ethnicity",
              title = paste0("Alpha diversity distribution - 16S ", site_name),
-             subtitle = subtitle_text,
              caption = paste0("Rarefied to ", format(rare_depth, big.mark = ","),
                               " reads/sample")) +
+        guides(fill = guide_legend(nrow = 2, byrow = TRUE)) +
         theme_Publication() +
         theme(axis.text.x = element_text(angle = 25, hjust = 1))
     ggsave(paste0("results/alpha_diversity/alpha_diversity_violin_16s_",
                   site_name, "_ethnicity.pdf"),
-           width = 10, height = 5)
+           width = 12, height = 6.5)
 
     ## ---- Linear regression (adjusted for covariates) ----
     reg_results <- bind_rows(
@@ -198,6 +261,6 @@ for (site_name in names(sites)) {
               paste0("results/alpha_diversity/alpha_diversity_regression_16s_",
                      site_name, ".csv"))
 
-    cat("Completed:", site_name, "—", n_samples, "samples",
-        "(Dutch:", n_dutch, "/ SAS:", n_sas, ")\n")
+    cat("Completed:", site_name, "—", n_samples, "samples across",
+        nrow(group_ns), "groups\n")
 }
