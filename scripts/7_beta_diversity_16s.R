@@ -52,8 +52,35 @@ test_n <- suppressWarnings(as.integer(Sys.getenv("BETA_DIV_TEST_N", "")))
 outdir <- if (!is.na(test_n)) "results/beta_diversity_test" else "results/beta_diversity"
 if (!is.na(test_n)) cat("TEST MODE: capping each group at", test_n, "samples, writing to", outdir, "\n")
 
-for (sub in c("pcoa", "permanova", "covariate_screen", "betadisper")) {
+for (sub in c("pcoa", "permanova", "covariate_screen", "betadisper", "cache")) {
     dir.create(file.path(outdir, sub), recursive = TRUE, showWarnings = FALSE)
+}
+
+## Cache: the distance matrices and every 999-permutation PERMANOVA/betadisper
+## call in this script are expensive, but most edits to this script only
+## touch a downstream plot or table format. read_or_compute() loads a cached
+## RDS instead of recomputing when one already exists at cache_file, so
+## adding something new (like the pairwise heatmap below) doesn't require
+## sitting through the full runtime again.
+## IMPORTANT: this cache is NOT auto-invalidated if you change the group
+## threshold, the covariates list, or the input data - delete <outdir>/cache/
+## (or set BETA_DIV_FORCE_RECOMPUTE=1 for one run) after any such change.
+force_recompute <- isTRUE(as.logical(Sys.getenv("BETA_DIV_FORCE_RECOMPUTE", "FALSE")))
+if (force_recompute) cat("BETA_DIV_FORCE_RECOMPUTE=1 - ignoring any cached results\n")
+
+## Cached results depend on test_n (a different sample subset each time it
+## changes), so key the cache filename on it to avoid silently loading a
+## stale cache computed under a different BETA_DIV_TEST_N value.
+cache_suffix <- if (!is.na(test_n)) paste0("_testN", test_n) else ""
+
+read_or_compute <- function(cache_file, compute_fn) {
+    if (file.exists(cache_file) && !force_recompute) {
+        cat("  [cache hit]", basename(cache_file), "\n")
+        return(readRDS(cache_file))
+    }
+    result <- compute_fn()
+    saveRDS(result, cache_file)
+    result
 }
 
 ## Number of cores for parallelizing independent PERMANOVA calls (covariate
@@ -120,6 +147,91 @@ pairwise_permanova <- function(dist_mat, meta, group_var = "EthnicityTotal", n_c
         tibble(group1 = pair[1], group2 = pair[2],
                R2 = fit$R2[1], F_stat = fit$F[1], p.value = fit[["Pr(>F)"]][1])
     }, mc.cores = n_cores) |> bind_rows() |> mutate(p.adj = p.adjust(p.value, method = "BH"))
+}
+
+## Bundles every permutation-heavy PERMANOVA/betadisper call for one site x
+## distance-metric combination into a single object, so it can be cached as
+## one unit via read_or_compute() (see above).
+compute_permanova_block <- function(dist_mat, meta, covariates, n_cores) {
+    ## ---- PERMANOVA: ethnicity only (omnibus across all groups) ----
+    permanova_eth <- adonis2(
+        dist_mat ~ EthnicityTotal,
+        data = meta,
+        permutations = 999,
+        parallel = n_cores,
+        by = "terms"
+    )
+
+    ## ---- PERMANOVA: pairwise post-hoc between every pair of groups ----
+    permanova_pairwise <- pairwise_permanova(dist_mat, meta, n_cores = n_cores)
+
+    ## ---- Covariate screening (individual PERMANOVA per covariate) ----
+    covariate_screen <- mclapply(covariates, function(cov) {
+        ## Use complete cases for this covariate
+        cc_idx <- !is.na(meta[[cov]])
+        if (sum(cc_idx) < 10) return(NULL)
+
+        meta_cc <- meta[cc_idx, ] |>
+            mutate(across(where(is.factor), droplevels))
+
+        ## Check covariate has >= 2 levels
+        vals <- meta_cc[[cov]]
+        if (is.factor(vals) && nlevels(vals) < 2) return(NULL)
+        if (!is.factor(vals) && length(unique(vals)) < 2) return(NULL)
+
+        dist_cc <- as.dist(as.matrix(dist_mat)[cc_idx, cc_idx])
+
+        formula <- as.formula(paste("dist_cc ~", cov))
+        res <- adonis2(formula, data = meta_cc, permutations = 999)
+        tibble(
+            covariate = cov,
+            Df        = res$Df[1],
+            R2        = res$R2[1],
+            F_stat    = res$F[1],
+            p.value   = res[["Pr(>F)"]][1]
+        )
+    }, mc.cores = n_cores) |> bind_rows()
+
+    sig_covariates <- covariate_screen |>
+        filter(p.value < 0.05) |>
+        pull(covariate)
+
+    ## ---- Full PERMANOVA: ethnicity + significant covariates ----
+    if (length(sig_covariates) > 0) {
+        model_vars <- c("EthnicityTotal", sig_covariates)
+        cc_idx <- complete.cases(meta[, model_vars])
+        meta_cc <- meta[cc_idx, ] |>
+            mutate(across(where(is.factor), droplevels))
+        dist_cc <- as.dist(as.matrix(dist_mat)[cc_idx, cc_idx])
+
+        permanova_full <- adonis2(
+            as.formula(paste("dist_cc ~ EthnicityTotal +",
+                             paste(sig_covariates, collapse = " + "))),
+            data = meta_cc,
+            permutations = 999,
+            parallel = n_cores,
+            by = "terms"
+        )
+    } else {
+        permanova_full <- permanova_eth
+    }
+
+    ## ---- Betadisper: test homogeneity of dispersions (omnibus + pairwise) ----
+    betadisp <- betadisper(dist_mat, meta$EthnicityTotal)
+    betadisp_test <- permutest(betadisp, permutations = 999, parallel = n_cores)
+    betadisp_pairwise <- as.data.frame(TukeyHSD(betadisp)$group) |>
+        rownames_to_column("pair")
+
+    list(
+        permanova_eth      = permanova_eth,
+        permanova_pairwise = permanova_pairwise,
+        covariate_screen   = covariate_screen,
+        sig_covariates     = sig_covariates,
+        permanova_full     = permanova_full,
+        betadisp           = betadisp,
+        betadisp_test      = betadisp_test,
+        betadisp_pairwise  = betadisp_pairwise
+    )
 }
 
 ## Covariates to screen
@@ -211,10 +323,13 @@ for (site_name in names(sites)) {
     cat("Groups (N>50) for", site_name, ":", paste(group_ns$EthnicityTotal, collapse = ", "), "\n")
 
     ## ---- Compute distance matrices ----
-    dist_bc  <- phyloseq::distance(ps, method = "bray")
-    dist_uni <- phyloseq::distance(ps, method = "wunifrac")
-
-    distances <- list("Bray-Curtis" = dist_bc, "Weighted UniFrac" = dist_uni)
+    distances <- read_or_compute(
+        file.path(outdir, "cache", paste0("distances_16s_", site_name, cache_suffix, ".rds")),
+        function() list(
+            "Bray-Curtis"      = phyloseq::distance(ps, method = "bray"),
+            "Weighted UniFrac" = phyloseq::distance(ps, method = "wunifrac")
+        )
+    )
 
     ## Collects ethnicity + covariate PERMANOVA R2/p from both distance
     ## metrics, for the covariate-effect summary plot built after this loop.
@@ -224,23 +339,29 @@ for (site_name in names(sites)) {
         dist_mat <- distances[[dist_name]]
         dist_label <- tolower(gsub("[- ]", "_", dist_name))
 
-        ## ---- PERMANOVA: ethnicity only (omnibus across all groups) ----
-        ## This runs on the full distance matrix, so it's the single most
-        ## expensive call here - parallelize its permutations directly.
-        permanova_eth <- adonis2(
-            dist_mat ~ EthnicityTotal,
-            data = meta,
-            permutations = 999,
-            parallel = n_cores,
-            by = "terms"
+        ## ---- PERMANOVA (omnibus + pairwise), covariate screen, betadisper ----
+        ## Every 999-permutation call for this site x distance combination is
+        ## bundled into one cached object (see read_or_compute() above) -
+        ## the single most expensive step in this script.
+        block <- read_or_compute(
+            file.path(outdir, "cache",
+                      paste0("permanova_block_", dist_label, "_16s_",
+                             site_name, cache_suffix, ".rds")),
+            function() compute_permanova_block(dist_mat, meta, covariates, n_cores)
         )
+        permanova_eth      <- block$permanova_eth
+        permanova_pairwise <- block$permanova_pairwise
+        covariate_screen   <- block$covariate_screen
+        sig_covariates     <- block$sig_covariates
+        permanova_full     <- block$permanova_full
+        betadisp           <- block$betadisp
+        betadisp_test      <- block$betadisp_test
+        betadisp_pairwise  <- block$betadisp_pairwise
+
         permanova_label <- paste0(
             "PERMANOVA: R² = ", round(permanova_eth$R2[1], 3),
             ", p = ", format.pval(permanova_eth[["Pr(>F)"]][1], digits = 2, eps = 0.001)
         )
-
-        ## ---- PERMANOVA: pairwise post-hoc between every pair of groups ----
-        permanova_pairwise <- pairwise_permanova(dist_mat, meta, n_cores = n_cores)
 
         ## ---- PCoA ordination ----
         pcoa <- ordinate(ps, method = "PCoA", distance = dist_mat)
@@ -291,39 +412,6 @@ for (site_name in names(sites)) {
                       site_name, ".pdf"),
                plot = p_pcoa, width = 7, height = 8)
 
-        ## ---- Covariate screening (individual PERMANOVA per covariate) ----
-        ## Covariates are independent of each other, so run them across cores.
-        covariate_screen <- mclapply(covariates, function(cov) {
-            ## Use complete cases for this covariate
-            cc_idx <- !is.na(meta[[cov]])
-            if (sum(cc_idx) < 10) return(NULL)
-
-            meta_cc <- meta[cc_idx, ] |>
-                mutate(across(where(is.factor), droplevels))
-
-            ## Check covariate has >= 2 levels
-            vals <- meta_cc[[cov]]
-            if (is.factor(vals) && nlevels(vals) < 2) return(NULL)
-            if (!is.factor(vals) && length(unique(vals)) < 2) return(NULL)
-
-            dist_cc <- as.dist(as.matrix(dist_mat)[cc_idx, cc_idx])
-
-            formula <- as.formula(paste("dist_cc ~", cov))
-            res <- adonis2(formula, data = meta_cc, permutations = 999)
-            tibble(
-                covariate = cov,
-                Df        = res$Df[1],
-                R2        = res$R2[1],
-                F_stat    = res$F[1],
-                p.value   = res[["Pr(>F)"]][1]
-            )
-        }, mc.cores = n_cores) |> bind_rows()
-
-        ## Identify significant covariates
-        sig_covariates <- covariate_screen |>
-            filter(p.value < 0.05) |>
-            pull(covariate)
-
         ## Stash ethnicity + covariate effect sizes for the summary plot
         covariate_screen_all[[dist_name]] <- bind_rows(
             tibble(covariate = "EthnicityTotal", Df = permanova_eth$Df[1],
@@ -331,37 +419,6 @@ for (site_name in names(sites)) {
                    p.value = permanova_eth[["Pr(>F)"]][1]),
             covariate_screen
         ) |> mutate(distance = dist_name)
-
-        ## ---- Full PERMANOVA: ethnicity + significant covariates ----
-        if (length(sig_covariates) > 0) {
-            formula_full <- as.formula(
-                paste("dist_mat ~ EthnicityTotal +",
-                      paste(sig_covariates, collapse = " + "))
-            )
-            ## Use complete cases for all variables in the model
-            model_vars <- c("EthnicityTotal", sig_covariates)
-            cc_idx <- complete.cases(meta[, model_vars])
-            meta_cc <- meta[cc_idx, ] |>
-                mutate(across(where(is.factor), droplevels))
-            dist_cc <- as.dist(as.matrix(dist_mat)[cc_idx, cc_idx])
-
-            permanova_full <- adonis2(
-                as.formula(paste("dist_cc ~ EthnicityTotal +",
-                                 paste(sig_covariates, collapse = " + "))),
-                data = meta_cc,
-                permutations = 999,
-                parallel = n_cores,
-                by = "terms"
-            )
-        } else {
-            permanova_full <- permanova_eth
-        }
-
-        ## ---- Betadisper: test homogeneity of dispersions (omnibus + pairwise) ----
-        betadisp <- betadisper(dist_mat, meta$EthnicityTotal)
-        betadisp_test <- permutest(betadisp, permutations = 999, parallel = n_cores)
-        betadisp_pairwise <- as.data.frame(TukeyHSD(betadisp)$group) |>
-            rownames_to_column("pair")
 
         ## Betadisper boxplot
         disp_df <- data.frame(
@@ -405,6 +462,44 @@ for (site_name in names(sites)) {
         write_csv(permanova_pairwise,
                   paste0(outdir, "/permanova/permanova_pairwise_", dist_label,
                          "_16s_", site_name, ".csv"))
+
+        ## ---- Pairwise PERMANOVA heatmap (R2, BH-adjusted significance) ----
+        ## Mirror every pair onto both triangles so geom_tile draws a full
+        ## symmetric group x group grid instead of a half-empty one.
+        groups_order <- levels(droplevels(meta$EthnicityTotal))
+        pairwise_mat_df <- bind_rows(
+            permanova_pairwise |> select(group1, group2, R2, p.adj),
+            permanova_pairwise |> select(group1 = group2, group2 = group1, R2, p.adj)
+        ) |>
+            mutate(
+                group1 = factor(group1, levels = groups_order),
+                group2 = factor(group2, levels = groups_order),
+                sig = case_when(
+                    p.adj < 0.0001 ~ "****",
+                    p.adj < 0.001  ~ "***",
+                    p.adj < 0.01   ~ "**",
+                    p.adj < 0.05   ~ "*",
+                    TRUE           ~ ""
+                ),
+                cell_label = paste0(sprintf("%.3f", R2), "\n", sig)
+            )
+
+        p_permanova_heat <- ggplot(pairwise_mat_df, aes(x = group1, y = group2, fill = R2)) +
+            geom_tile(colour = "white") +
+            geom_text(aes(label = cell_label), size = 3, lineheight = 0.9) +
+            scale_fill_gradient(low = "#F7F7F7", high = "#B2182B", limits = c(0, NA)) +
+            scale_x_discrete(drop = FALSE) +
+            scale_y_discrete(drop = FALSE) +
+            labs(x = NULL, y = NULL, fill = expression(R^2),
+                 title = paste0("Pairwise PERMANOVA - ", dist_name, " - 16S ", site_name),
+                 caption = "BH-adjusted: * p<0.05, ** p<0.01, *** p<0.001, **** p<0.0001") +
+            theme_Publication() +
+            theme(axis.text.x = element_text(angle = 45, hjust = 1),
+                  legend.position = "right",
+                  panel.grid = element_blank())
+        ggsave(paste0(outdir, "/permanova/permanova_pairwise_heatmap_", dist_label,
+                      "_16s_", site_name, ".pdf"),
+               plot = p_permanova_heat, width = 6, height = 5.5)
 
         ## Covariate screening
         write_csv(covariate_screen,
