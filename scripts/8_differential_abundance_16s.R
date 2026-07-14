@@ -491,9 +491,18 @@ run_da_pair <- function(ps_site, site_name, group1, group2, sig_confounders, out
                 labs(x = NULL,
                      y = paste0("Coefficient (", group2, " vs ", group1, ", 95% CI)"),
                      colour = "Model",
-                     title = paste0("Forest plot differential abundant ASVs ",
-                                    site_name, " (", g1_abbr, " vs ", g2_abbr,
-                                    ") (page ", page, "/", n_pages, ")"),
+                     ## Just the comparison, in the same group2-vs-group1
+                     ## order as the coefficient axis label above (titles
+                     ## used to read group1-vs-group2, the reverse) - the
+                     ## repeated "Forest plot differential abundant ASVs
+                     ## <site>" boilerplate is dropped since these panels are
+                     ## meant to sit side by side across all pairs at a site
+                     title = if (n_pages > 1) {
+                         paste0(g2_abbr, " vs ", g1_abbr,
+                                " (page ", page, "/", n_pages, ")")
+                     } else {
+                         paste0(g2_abbr, " vs ", g1_abbr)
+                     },
                      subtitle = paste0("q < 0.05 in adjusted model (n = ",
                                        n_total, " total)\nAdjusted for: ",
                                        format_covariates(sig_confounders))) +
