@@ -1,9 +1,15 @@
 ## Beta diversity analysis: 16S microbiome (throat and nose)
-## South-Asian Surinamese participants only
+## All non-Dutch ethnicity groups with N > 50, pooled (Dutch has no
+## migration/acculturation data - see below)
 ## Screening migration/acculturation covariates (structurally NA for Dutch
 ## participants, so not usable in the ethnicity-comparison scripts)
 ## with PERMANOVA, covariate screening, and betadisper
-## Primary grouping variable: MigrationGen (1st vs 2nd generation)
+## Primary grouping variable: MigrationGen (1st vs 2nd generation).
+## Ethnicity is forced into every model as a covariate (entered before
+## MigrationGen, so its variance is partialled out first): pooling several
+## ethnic groups means their generation composition differs (e.g. Ghanaian
+## is almost entirely 1st generation, n=2 2nd-gen), so without adjustment
+## an apparent "generation" effect could really just be an ethnicity effect.
 
 ## Libraries
 library(here)
@@ -50,11 +56,30 @@ dir.create("results/beta_diversity_migration", recursive = TRUE, showWarnings = 
 ## Define migration generation colours
 gen_colours <- c("1st generation" = "#33A02C", "2nd generation" = "#6A3D9A")
 
+## Ethnicity colours (same validated palette as scripts 6-8, so a given
+## ethnicity is always the same colour across every figure)
+eth_colours <- c(
+    "Dutch"                  = "#1F78B4",
+    "South-Asian Surinamese" = "#E31A1C",
+    "African Surinamese"     = "#33A02C",
+    "Javanese Surinamese"    = "#6A3D9A",
+    "Other"                  = "#B15928",
+    "Ghanaian"               = "#FF7F00",
+    "Turkish"                = "#E7298A",
+    "Moroccan"               = "#D4AC0D"
+)
+
+## Keep only ethnicity groups with more than n=50 samples (matches Table 1)
+keep_groups <- function(ps, min_n = 50) {
+    counts <- table(sample_data(ps)$EthnicityTotal)
+    names(counts)[counts > min_n]
+}
+
 ## Migration/acculturation covariates to screen.
 ## These are structurally NA for all Dutch participants (baseline-only,
 ## migrant-specific variables), so they cannot be used in the Dutch vs
 ## South-Asian Surinamese comparison scripts. Here they are screened within
-## South-Asian Surinamese participants only.
+## every non-Dutch group with N > 50, pooled.
 ## Note: ResidenceDuration_BA and AgeMigration_BA are additionally NA for all
 ## 2nd-generation participants (born in the Netherlands, no migration event),
 ## so their screen is implicitly restricted to 1st-generation participants
@@ -62,7 +87,7 @@ gen_colours <- c("1st generation" = "#33A02C", "2nd generation" = "#6A3D9A")
 covariates <- c(
     "ResidenceDuration_BA", "AgeMigration_BA", "DifficultyDutch_BA",
     "CultFeelBerrys_BA", "CultOrientBerrys_BA", "CultNetworkBerrys_BA",
-    "CultDistMeanScore0_BA", "CultDistMeanScore6_BA"
+    "CultDistMeanScore0_BA", "CultDistMeanScore6_BA", "DiscrMean_BA"
 )
 
 ## ---- Analysis loop over sites ----
@@ -74,13 +99,16 @@ sites <- list(
 for (site_name in names(sites)) {
     ps <- sites[[site_name]]
 
-    ## Filter to South-Asian Surinamese only
-    ps <- subset_samples(ps, EthnicityTotal == "South-Asian Surinamese")
+    ## Filter to non-Dutch ethnicity groups with N > 50 (Dutch is excluded by
+    ## construction anyway - MigrationGen is NA for every Dutch participant)
+    qualifying <- setdiff(keep_groups(ps), "Dutch")
+    ps <- subset_samples(ps, EthnicityTotal %in% qualifying)
 
     ## Extract metadata and drop unused factor levels
     meta <- sample_data(ps) |>
         as("data.frame") |>
-        mutate(MigrationGen = droplevels(factor(MigrationGen)))
+        mutate(MigrationGen = droplevels(factor(MigrationGen)),
+               EthnicityTotal = droplevels(factor(EthnicityTotal)))
     sample_data(ps) <- sample_data(meta)
 
     n_samples <- nsamples(ps)
@@ -88,6 +116,11 @@ for (site_name in names(sites)) {
     n_2nd <- sum(meta$MigrationGen == "2nd generation")
     subtitle_text <- paste0("1st generation (n = ", n_1st,
                             ") vs 2nd generation (n = ", n_2nd, ")")
+    gen_by_eth <- meta |> count(EthnicityTotal, MigrationGen)
+    cat("Groups (N>50, non-Dutch) for", site_name, ":",
+        paste(qualifying, collapse = ", "), "\n")
+    cat("Generation split by ethnicity:\n")
+    print(gen_by_eth)
 
     ## ---- Compute distance matrices ----
     dist_bc  <- phyloseq::distance(ps, method = "bray")
@@ -108,7 +141,8 @@ for (site_name in names(sites)) {
         ord_df <- data.frame(
             PCo1 = pcoa$vectors[, 1],
             PCo2 = pcoa$vectors[, 2],
-            MigrationGen = meta$MigrationGen
+            MigrationGen = meta$MigrationGen,
+            EthnicityTotal = meta$EthnicityTotal
         )
 
         ## PCoA plot coloured by migration generation
@@ -120,7 +154,7 @@ for (site_name in names(sites)) {
                  y = paste0("PCo2 (", var_explained[2], "%)"),
                  colour = "Migration generation",
                  title = paste0("PCoA - ", dist_name, " - 16S ", site_name,
-                                " (South-Asian Surinamese only)"),
+                                " (all non-Dutch groups, N>50)"),
                  subtitle = subtitle_text) +
             theme_Publication() +
             theme(legend.position = "bottom")
@@ -128,11 +162,32 @@ for (site_name in names(sites)) {
                       site_name, ".pdf"),
                width = 7, height = 6)
 
-        ## ---- PERMANOVA: migration generation only ----
+        ## ---- Supplementary: same PCoA coloured by ethnicity, to see how
+        ## much of the ordination it's driving before/next to MigrationGen ----
+        ggplot(ord_df, aes(x = PCo1, y = PCo2, colour = EthnicityTotal)) +
+            geom_point(alpha = 0.5, size = 1) +
+            stat_ellipse(level = 0.95, linewidth = 0.8) +
+            scale_colour_manual(values = eth_colours) +
+            labs(x = paste0("PCo1 (", var_explained[1], "%)"),
+                 y = paste0("PCo2 (", var_explained[2], "%)"),
+                 colour = "Ethnicity",
+                 title = paste0("PCoA - ", dist_name, " - 16S ", site_name,
+                                " (all non-Dutch groups, N>50)")) +
+            guides(colour = guide_legend(nrow = 2, byrow = TRUE)) +
+            theme_Publication() +
+            theme(legend.position = "bottom")
+        ggsave(paste0("results/beta_diversity_migration/pcoa_", dist_label, "_16s_",
+                      site_name, "_ethnicity.pdf"),
+               width = 7, height = 8)
+
+        ## ---- PERMANOVA: ethnicity + migration generation ----
+        ## Ethnicity enters first so MigrationGen's row reflects its effect
+        ## net of ethnicity, not the ethnicity-confounded raw association.
         permanova_gen <- adonis2(
-            dist_mat ~ MigrationGen,
+            dist_mat ~ EthnicityTotal + MigrationGen,
             data = meta,
-            permutations = 999
+            permutations = 999,
+            by = "terms"
         )
 
         ## ---- Covariate screening (individual PERMANOVA per covariate) ----
@@ -167,20 +222,22 @@ for (site_name in names(sites)) {
             filter(p.value < 0.05) |>
             pull(covariate)
 
-        ## ---- Full PERMANOVA: migration generation + significant covariates ----
+        ## ---- Full PERMANOVA: ethnicity + migration generation + significant
+        ## covariates (ethnicity is forced, not screened - see header) ----
         if (length(sig_covariates) > 0) {
             ## Use complete cases for all variables in the model
-            model_vars <- c("MigrationGen", sig_covariates)
+            model_vars <- c("EthnicityTotal", "MigrationGen", sig_covariates)
             cc_idx <- complete.cases(meta[, model_vars])
             meta_cc <- meta[cc_idx, ] |>
                 mutate(across(where(is.factor), droplevels))
             dist_cc <- as.dist(as.matrix(dist_mat)[cc_idx, cc_idx])
 
             permanova_full <- adonis2(
-                as.formula(paste("dist_cc ~ MigrationGen +",
+                as.formula(paste("dist_cc ~ EthnicityTotal + MigrationGen +",
                                  paste(sig_covariates, collapse = " + "))),
                 data = meta_cc,
-                permutations = 999
+                permutations = 999,
+                by = "terms"
             )
         } else {
             permanova_full <- permanova_gen
@@ -201,7 +258,7 @@ for (site_name in names(sites)) {
             scale_fill_manual(values = gen_colours) +
             labs(x = NULL, y = "Distance to centroid", fill = "Migration generation",
                  title = paste0("Betadisper - ", dist_name, " - 16S ", site_name,
-                                " (South-Asian Surinamese only)"),
+                                " (all non-Dutch groups, N>50)"),
                  subtitle = paste0("Permutest p = ",
                                    format.pval(betadisp_test$tab[["Pr(>F)"]][1],
                                                digits = 3))) +
@@ -212,10 +269,10 @@ for (site_name in names(sites)) {
                width = 5, height = 5)
 
         ## ---- Save results tables ----
-        ## PERMANOVA migration-generation-only
+        ## PERMANOVA ethnicity + migration-generation (unadjusted for other covariates)
         permanova_gen_df <- as.data.frame(permanova_gen) |>
             rownames_to_column("term") |>
-            mutate(model = "migrationgen_only", .before = 1)
+            mutate(model = "ethnicity_and_migrationgen", .before = 1)
 
         ## PERMANOVA full model
         permanova_full_df <- as.data.frame(permanova_full) |>
@@ -250,7 +307,7 @@ for (site_name in names(sites)) {
                      y = paste0("PCo2 (", var_explained[2], "%)"),
                      colour = cov,
                      title = paste0("PCoA - ", dist_name, " - 16S ", site_name,
-                                    " (South-Asian Surinamese only)"),
+                                    " (all non-Dutch groups, N>50)"),
                      subtitle = paste0("Coloured by ", cov)) +
                 theme_Publication() +
                 theme(legend.position = "right")
