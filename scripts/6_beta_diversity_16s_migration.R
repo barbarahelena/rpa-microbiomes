@@ -224,21 +224,42 @@ for (site_name in names(sites)) {
 
         ## ---- Full PERMANOVA: ethnicity + migration generation + significant
         ## covariates (ethnicity is forced, not screened - see header) ----
-        if (length(sig_covariates) > 0) {
-            ## Use complete cases for all variables in the model
-            model_vars <- c("EthnicityTotal", "MigrationGen", sig_covariates)
+        ## ResidenceDuration_BA/AgeMigration_BA are structurally NA for every
+        ## 2nd-generation participant (see header), so complete-case
+        ## filtering on either together with MigrationGen drops all 2nd-gen
+        ## rows, leaving MigrationGen with a single level - adonis2 can't fit
+        ## a contrast for that. Keep them out of the joint model even if
+        ## individually significant; their own univariate result (1st-gen
+        ## only, by construction) is already saved in covariate_screen.
+        model_covariates <- setdiff(sig_covariates,
+                                    c("ResidenceDuration_BA", "AgeMigration_BA"))
+
+        ## Any other covariate could in principle also happen to be NA for an
+        ## entire MigrationGen or EthnicityTotal level in this particular
+        ## complete-case subset - guard generically, not just for the two
+        ## known offenders above, so a 45-min run never dies on this again.
+        if (length(model_covariates) > 0) {
+            model_vars <- c("EthnicityTotal", "MigrationGen", model_covariates)
             cc_idx <- complete.cases(meta[, model_vars])
             meta_cc <- meta[cc_idx, ] |>
                 mutate(across(where(is.factor), droplevels))
-            dist_cc <- as.dist(as.matrix(dist_mat)[cc_idx, cc_idx])
 
-            permanova_full <- adonis2(
-                as.formula(paste("dist_cc ~ EthnicityTotal + MigrationGen +",
-                                 paste(sig_covariates, collapse = " + "))),
-                data = meta_cc,
-                permutations = 999,
-                by = "terms"
-            )
+            if (nlevels(meta_cc$EthnicityTotal) < 2 || nlevels(meta_cc$MigrationGen) < 2) {
+                warning(site_name, " ", dist_name,
+                        ": complete-case filtering on ", paste(model_covariates, collapse = ", "),
+                        " collapsed EthnicityTotal or MigrationGen to a single level - ",
+                        "falling back to the unadjusted model")
+                permanova_full <- permanova_gen
+            } else {
+                dist_cc <- as.dist(as.matrix(dist_mat)[cc_idx, cc_idx])
+                permanova_full <- adonis2(
+                    as.formula(paste("dist_cc ~ EthnicityTotal + MigrationGen +",
+                                     paste(model_covariates, collapse = " + "))),
+                    data = meta_cc,
+                    permutations = 999,
+                    by = "terms"
+                )
+            }
         } else {
             permanova_full <- permanova_gen
         }
