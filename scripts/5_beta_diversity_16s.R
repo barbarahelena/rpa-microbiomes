@@ -122,6 +122,112 @@ pairwise_permanova <- function(dist_mat, meta, group_var = "EthnicityTotal", n_c
     }, mc.cores = n_cores) |> bind_rows() |> mutate(p.adj = p.adjust(p.value, method = "BH"))
 }
 
+## Pairwise PERMANOVA between every pair of groups, adjusted for covariates
+## (entered before the group term so the group's R2/p reflect its effect net
+## of those covariates, matching the ethnicity-net-of-covariate convention
+## used by the migration script's adjusted model). `covariates` is expected
+## to be the significant covariates from this site x distance's screen (see
+## sig_covariates in compute_permanova_block). Falls back to the unadjusted
+## group-only model for a pair when complete-case filtering on the
+## covariates collapses the group variable or a covariate to a single level
+## within that pair.
+pairwise_permanova_adjusted <- function(dist_mat, meta, covariates, unadjusted,
+                                         group_var = "EthnicityTotal", n_cores = 1) {
+    if (length(covariates) == 0) return(unadjusted)
+
+    groups <- levels(droplevels(meta[[group_var]]))
+    pairs <- combn(groups, 2, simplify = FALSE)
+    mclapply(pairs, function(pair) {
+        idx <- meta[[group_var]] %in% pair & complete.cases(meta[, covariates, drop = FALSE])
+        m_sub <- meta[idx, ] |> mutate(across(where(is.factor), droplevels))
+
+        group_ok <- nlevels(m_sub[[group_var]]) >= 2
+        cov_ok <- vapply(covariates, function(cov) {
+            v <- m_sub[[cov]]
+            if (is.factor(v)) nlevels(v) >= 2 else length(unique(v)) >= 2
+        }, logical(1))
+
+        if (!group_ok || !all(cov_ok)) {
+            idx_unadj <- meta[[group_var]] %in% pair
+            d_unadj <- as.dist(as.matrix(dist_mat)[idx_unadj, idx_unadj])
+            m_unadj <- meta[idx_unadj, ] |> mutate(across(where(is.factor), droplevels))
+            fit <- adonis2(as.formula(paste("d_unadj ~", group_var)),
+                            data = m_unadj, permutations = 999)
+            return(tibble(group1 = pair[1], group2 = pair[2],
+                           R2 = fit$R2[1], F_stat = fit$F[1],
+                           p.value = fit[["Pr(>F)"]][1]))
+        }
+
+        d_sub <- as.dist(as.matrix(dist_mat)[idx, idx])
+        fit <- adonis2(as.formula(paste("d_sub ~", paste(covariates, collapse = " + "),
+                                        "+", group_var)),
+                        data = m_sub, permutations = 999, by = "terms")
+        tibble(group1 = pair[1], group2 = pair[2],
+               R2 = fit[group_var, "R2"], F_stat = fit[group_var, "F"],
+               p.value = fit[group_var, "Pr(>F)"])
+    }, mc.cores = n_cores) |> bind_rows() |> mutate(p.adj = p.adjust(p.value, method = "BH"))
+}
+
+## Word-wraps a title/subtitle to a fixed character width so it fits inside
+## the plot instead of running off the page, and reports how many lines the
+## wrapped text ended up as (so callers can size the plot's height to it).
+wrap_for_plot <- function(x, width = 50) {
+    if (is.null(x)) return(list(text = NULL, n_lines = 0))
+    wrapped <- str_wrap(x, width = width)
+    list(text = wrapped, n_lines = lengths(regmatches(wrapped, gregexpr("\n", wrapped))) + 1)
+}
+
+## Pairwise PERMANOVA R2 heatmap (BH-adjusted significance stars). Each pair
+## is drawn once - group1 always precedes group2 in groups_order (pairs come
+## from combn() over an ordered group list) - so the tiles fill a single
+## triangle instead of a mirrored square with every result shown twice.
+## `fill_limits` lets an adjusted and unadjusted heatmap for the same site x
+## metric share one colour scale, so a colour comparison between the two
+## plots is fair rather than each auto-scaling to its own max R2.
+pairwise_permanova_heatmap <- function(pairwise_df, groups_order, title, subtitle = NULL,
+                                        fill_limits = c(0, NA)) {
+    pairwise_mat_df <- pairwise_df |>
+        select(group1, group2, R2, p.adj) |>
+        mutate(
+            group1 = factor(group1, levels = groups_order),
+            group2 = factor(group2, levels = groups_order),
+            sig = case_when(
+                p.adj < 0.0001 ~ "****",
+                p.adj < 0.001  ~ "***",
+                p.adj < 0.01   ~ "**",
+                p.adj < 0.05   ~ "*",
+                TRUE           ~ ""
+            ),
+            cell_label = paste0(sprintf("%.3f", R2), "\n", sig)
+        )
+
+    title_wrapped <- wrap_for_plot(title, width = 45)
+    ## Subtitle can carry a long comma-separated covariate list - render it
+    ## smaller and wrap tighter than the title so lines stay inside a 6" plot
+    subtitle_wrapped <- wrap_for_plot(subtitle, width = 62)
+
+    p <- ggplot(pairwise_mat_df, aes(x = group1, y = group2, fill = R2)) +
+        geom_tile(colour = "white") +
+        geom_text(aes(label = cell_label), size = 3, lineheight = 0.9) +
+        scale_fill_gradient(low = "#F7F7F7", high = "#B2182B", limits = fill_limits) +
+        scale_x_discrete(drop = FALSE) +
+        scale_y_discrete(drop = FALSE) +
+        labs(x = NULL, y = NULL, fill = expression(R^2),
+             title = title_wrapped$text, subtitle = subtitle_wrapped$text,
+             caption = "BH-adjusted: * p<0.05, ** p<0.01, *** p<0.001, **** p<0.0001") +
+        theme_Publication() +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1),
+              legend.position = "right",
+              panel.grid = element_blank(),
+              plot.subtitle = element_text(size = rel(0.55), face = "italic"))
+
+    ## Extra plot height (inches) the caller should add so the wrapped
+    ## title/subtitle have room to breathe instead of crowding the tiles
+    attr(p, "extra_height") <- 0.28 * (title_wrapped$n_lines - 1) +
+        0.17 * subtitle_wrapped$n_lines
+    p
+}
+
 ## Bundles every permutation-heavy PERMANOVA/betadisper call for one site x
 ## distance-metric combination into a single object.
 compute_permanova_block <- function(dist_mat, meta, covariates, n_cores) {
@@ -188,6 +294,12 @@ compute_permanova_block <- function(dist_mat, meta, covariates, n_cores) {
         permanova_full <- permanova_eth
     }
 
+    ## ---- PERMANOVA pairwise post-hoc, adjusted for significant covariates ----
+    permanova_pairwise_adjusted <- pairwise_permanova_adjusted(
+        dist_mat, meta, sig_covariates, unadjusted = permanova_pairwise,
+        n_cores = n_cores
+    )
+
     ## ---- Betadisper: test homogeneity of dispersions (omnibus + pairwise) ----
     betadisp <- betadisper(dist_mat, meta$EthnicityTotal)
     betadisp_test <- permutest(betadisp, permutations = 999, parallel = n_cores)
@@ -195,14 +307,15 @@ compute_permanova_block <- function(dist_mat, meta, covariates, n_cores) {
         rownames_to_column("pair")
 
     list(
-        permanova_eth      = permanova_eth,
-        permanova_pairwise = permanova_pairwise,
-        covariate_screen   = covariate_screen,
-        sig_covariates     = sig_covariates,
-        permanova_full     = permanova_full,
-        betadisp           = betadisp,
-        betadisp_test      = betadisp_test,
-        betadisp_pairwise  = betadisp_pairwise
+        permanova_eth               = permanova_eth,
+        permanova_pairwise          = permanova_pairwise,
+        permanova_pairwise_adjusted = permanova_pairwise_adjusted,
+        covariate_screen            = covariate_screen,
+        sig_covariates              = sig_covariates,
+        permanova_full              = permanova_full,
+        betadisp                    = betadisp,
+        betadisp_test               = betadisp_test,
+        betadisp_pairwise           = betadisp_pairwise
     )
 }
 
@@ -313,14 +426,15 @@ for (site_name in names(sites)) {
         ## bundled into one object - the single most expensive step in this
         ## script.
         block <- compute_permanova_block(dist_mat, meta, covariates, n_cores)
-        permanova_eth      <- block$permanova_eth
-        permanova_pairwise <- block$permanova_pairwise
-        covariate_screen   <- block$covariate_screen
-        sig_covariates     <- block$sig_covariates
-        permanova_full     <- block$permanova_full
-        betadisp           <- block$betadisp
-        betadisp_test      <- block$betadisp_test
-        betadisp_pairwise  <- block$betadisp_pairwise
+        permanova_eth               <- block$permanova_eth
+        permanova_pairwise          <- block$permanova_pairwise
+        permanova_pairwise_adjusted <- block$permanova_pairwise_adjusted
+        covariate_screen            <- block$covariate_screen
+        sig_covariates              <- block$sig_covariates
+        permanova_full              <- block$permanova_full
+        betadisp                    <- block$betadisp
+        betadisp_test               <- block$betadisp_test
+        betadisp_pairwise           <- block$betadisp_pairwise
 
         permanova_label <- paste0(
             "PERMANOVA: R² = ", round(permanova_eth$R2[1], 3),
@@ -427,43 +541,47 @@ for (site_name in names(sites)) {
                   paste0(outdir, "/permanova/permanova_pairwise_", dist_label,
                          "_16s_", site_name, ".csv"))
 
-        ## ---- Pairwise PERMANOVA heatmap (R2, BH-adjusted significance) ----
-        ## Mirror every pair onto both triangles so geom_tile draws a full
-        ## symmetric group x group grid instead of a half-empty one.
-        groups_order <- levels(droplevels(meta$EthnicityTotal))
-        pairwise_mat_df <- bind_rows(
-            permanova_pairwise |> select(group1, group2, R2, p.adj),
-            permanova_pairwise |> select(group1 = group2, group2 = group1, R2, p.adj)
-        ) |>
-            mutate(
-                group1 = factor(group1, levels = groups_order),
-                group2 = factor(group2, levels = groups_order),
-                sig = case_when(
-                    p.adj < 0.0001 ~ "****",
-                    p.adj < 0.001  ~ "***",
-                    p.adj < 0.01   ~ "**",
-                    p.adj < 0.05   ~ "*",
-                    TRUE           ~ ""
-                ),
-                cell_label = paste0(sprintf("%.3f", R2), "\n", sig)
-            )
+        ## PERMANOVA pairwise post-hoc, adjusted for significant covariates
+        ## (same covariates as permanova_full's adjustment set for this site
+        ## x distance combination; empty set means this equals the
+        ## unadjusted table above)
+        write_csv(permanova_pairwise_adjusted,
+                  paste0(outdir, "/permanova/permanova_pairwise_adjusted_", dist_label,
+                         "_16s_", site_name, ".csv"))
 
-        p_permanova_heat <- ggplot(pairwise_mat_df, aes(x = group1, y = group2, fill = R2)) +
-            geom_tile(colour = "white") +
-            geom_text(aes(label = cell_label), size = 3, lineheight = 0.9) +
-            scale_fill_gradient(low = "#F7F7F7", high = "#B2182B", limits = c(0, NA)) +
-            scale_x_discrete(drop = FALSE) +
-            scale_y_discrete(drop = FALSE) +
-            labs(x = NULL, y = NULL, fill = expression(R^2),
-                 title = paste0("Pairwise PERMANOVA - ", dist_name, " - 16S ", site_name),
-                 caption = "BH-adjusted: * p<0.05, ** p<0.01, *** p<0.001, **** p<0.0001") +
-            theme_Publication() +
-            theme(axis.text.x = element_text(angle = 45, hjust = 1),
-                  legend.position = "right",
-                  panel.grid = element_blank())
+        ## ---- Pairwise PERMANOVA heatmaps (R2, BH-adjusted significance) ----
+        groups_order <- levels(droplevels(meta$EthnicityTotal))
+
+        ## Shared colour-scale ceiling across the unadjusted and adjusted
+        ## heatmaps, so a colour comparison between the two is fair instead
+        ## of each plot auto-scaling to its own max R2.
+        shared_fill_max <- max(permanova_pairwise$R2, permanova_pairwise_adjusted$R2)
+
+        p_permanova_heat <- pairwise_permanova_heatmap(
+            permanova_pairwise, groups_order,
+            title = paste0("Pairwise PERMANOVA - ", dist_name, " - 16S ", site_name),
+            fill_limits = c(0, shared_fill_max)
+        )
         ggsave(paste0(outdir, "/permanova/permanova_pairwise_heatmap_", dist_label,
                       "_16s_", site_name, ".pdf"),
-               plot = p_permanova_heat, width = 6, height = 5.5)
+               plot = p_permanova_heat,
+               width = 6, height = 5.5 + attr(p_permanova_heat, "extra_height"))
+
+        adjusted_subtitle <- if (length(sig_covariates) > 0) {
+            paste0("Adjusted for: ", paste(covariate_labels[sig_covariates], collapse = ", "))
+        } else {
+            "No significant covariates - same as unadjusted"
+        }
+        p_permanova_heat_adjusted <- pairwise_permanova_heatmap(
+            permanova_pairwise_adjusted, groups_order,
+            title = paste0("Pairwise PERMANOVA (adjusted) - ", dist_name, " - 16S ", site_name),
+            subtitle = adjusted_subtitle,
+            fill_limits = c(0, shared_fill_max)
+        )
+        ggsave(paste0(outdir, "/permanova/permanova_pairwise_heatmap_adjusted_", dist_label,
+                      "_16s_", site_name, ".pdf"),
+               plot = p_permanova_heat_adjusted,
+               width = 6, height = 5.5 + attr(p_permanova_heat_adjusted, "extra_height"))
 
         ## Covariate screening
         write_csv(covariate_screen,
