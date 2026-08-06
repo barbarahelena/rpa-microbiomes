@@ -86,7 +86,13 @@ vars_table1 <- c(
 
   # COVID-19 test results
   "Cov1_ResultText",
-  "Cov2_ResultText"
+  "Cov2_ResultText",
+
+  # Air pollution exposure (RIVM ALO, 2013-2015 address-based mean)
+  "PM10_mean",
+  "PM25_mean",
+  "NO2_mean",
+  "EC_mean"
 )
 
 table_one <- CreateTableOne(

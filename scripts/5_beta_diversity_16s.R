@@ -223,7 +223,10 @@ covariates <- c(
 
     # Mouth and nose variables
     "ToothBrushing_FU", "TongueBrushing_FU", "Mouthwash_FU",
-    "OralHealth_FU", "Nasal_FU"
+    "OralHealth_FU", "Nasal_FU",
+
+    # Air pollution exposure (RIVM ALO, 2013-2015 address-based mean)
+    "PM10_mean", "PM25_mean", "NO2_mean", "EC_mean"
 )
 
 ## Human-readable labels for plots (raw variable names stay in filenames/CSVs)
@@ -252,6 +255,10 @@ covariate_labels <- c(
     Mouthwash_FU         = "Mouthwash use",
     OralHealth_FU        = "Self-rated oral health",
     Nasal_FU             = "Nasal medication use",
+    PM10_mean            = "PM10 (2013-2015 mean)",
+    PM25_mean            = "PM2.5 (2013-2015 mean)",
+    NO2_mean             = "NO2 (2014-2015 mean)",
+    EC_mean              = "Soot/EC (2013-2015 mean)",
     EthnicityTotal       = "Ethnicity"
 )
 
