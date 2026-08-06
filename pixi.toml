@@ -9,6 +9,19 @@ version = "0.1.0"
 install-bioc-data = "R -e \"BiocManager::install('GenomeInfoDbData', ask=FALSE, update=FALSE)\""
 install-decontam = "R -e \"BiocManager::install('decontam', ask=FALSE, update=FALSE)\""
 install-maaslin2 = "R -e \"BiocManager::install('Maaslin2', ask=FALSE, update=FALSE)\""
+clean-helius = { cmd = "Rscript scripts/1a_datacleaning_helius.R", description = "Clean HELIUS clinical/metadata" }
+clean-biome = { cmd = "Rscript scripts/1b_datacleaning_biome.R", depends-on = ["clean-helius"], description = "Clean and filter 16S and shotgun microbiome data into phyloseq objects" }
+tableone = { cmd = "Rscript scripts/2_tableone.R", depends-on = ["clean-biome"], description = "Table 1: cohort characteristics" }
+relabund-plots = { cmd = "Rscript scripts/3_relative_abundance_plots.R", depends-on = ["clean-biome"], description = "Compositional (stacked bar) plots of taxon relative abundance" }
+alpha-16s = { cmd = "Rscript scripts/4_alpha_diversity_16s_ethnicity.R", depends-on = ["clean-biome"], description = "Alpha diversity, 16S throat/nose, stratified by ethnicity" }
+beta-16s = { cmd = "Rscript scripts/5_beta_diversity_16s.R", depends-on = ["clean-biome"], description = "Beta diversity, 16S throat/nose, stratified by ethnicity (PERMANOVA, betadisper)" }
+beta-16s-migration = { cmd = "Rscript scripts/6_beta_diversity_16s_migration.R", depends-on = ["clean-biome"], description = "Beta diversity, 16S, non-Dutch groups pooled by migration/acculturation" }
+diffabund-16s = { cmd = "Rscript scripts/7_differential_abundance_16s.R", depends-on = ["clean-biome"], description = "Differential abundance, 16S throat/nose, pairwise ethnicity comparisons (MaAsLin2)" }
+upset-diffabund-16s = { cmd = "Rscript scripts/8_upset_diffabund_16s.R", depends-on = ["diffabund-16s"], description = "Overlap of significant differentially abundant taxa across ethnicity pairs" }
+alpha-shotgun = { cmd = "Rscript scripts/9_alpha_diversity_shotgun.R", depends-on = ["clean-biome"], description = "Alpha diversity, shotgun tongue/throat, stratified by ethnicity" }
+airpollution-participants = { cmd = "Rscript scripts/10_airpollution_participants.R", depends-on = ["clean-helius"], description = "Air pollution exposure distribution among HELIUS participants" }
+airpollution-amsterdam = { cmd = "Rscript scripts/11_airpollution_amsterdam.R", description = "Amsterdam-wide PC6 air pollution map" }
+pipeline = { depends-on = ["tableone", "relabund-plots", "alpha-16s", "beta-16s", "beta-16s-migration", "upset-diffabund-16s", "alpha-shotgun", "airpollution-participants", "airpollution-amsterdam"], description = "Run the full analysis pipeline end to end" }
 
 [dependencies]
 bioconductor-phyloseq = { version = ">=1.50.0,<2", channel = "bioconda" }
