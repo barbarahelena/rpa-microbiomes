@@ -122,10 +122,12 @@ covariates_list <- list(
                "HTSelfBP_FU", "DMSelfGluc_FU", "MetSyn_FU", "Lipidlowering_FU",
                "Antidepressants_FU", "Psychotropics_FU",
                "ToothBrushing_FU", "TongueBrushing_FU", "Mouthwash_FU",
-               "OralHealth_FU"),
+               "OralHealth_FU",
+               "PM10_mean", "PM25_mean", "NO2_mean", "EC_mean"),
     nose = c("Age_FU", "Sex", "BMI_FU", "Smoking_FU", "AlcoholYN_FU",
              "MetSyn_FU",
-             "ToothBrushing_FU", "TongueBrushing_FU", "Mouthwash_FU")
+             "ToothBrushing_FU", "TongueBrushing_FU", "Mouthwash_FU",
+             "PM10_mean", "PM25_mean", "NO2_mean", "EC_mean")
 )
 
 ## ---- Confounder assessment: omnibus across all qualifying groups ----
@@ -574,10 +576,9 @@ sites <- list(
     nose   = readRDS("data/processed/ps_nose_rarefied.RDS")
 )
 
-## Nose has substantially fewer samples per group than throat (its largest
-## non-Dutch group is Moroccan at 238 vs throat's 415+), so it uses its own,
-## less stringent qualification threshold rather than throat's >400.
-min_group_n <- c(throat = 400, nose = 150)
+## Same N>50 threshold as the alpha/beta diversity scripts (4, 5), so every
+## ethnicity group screened there is also tested here.
+min_group_n <- c(throat = 50, nose = 50)
 summary_rows <- list()
 
 for (site_name in names(sites)) {

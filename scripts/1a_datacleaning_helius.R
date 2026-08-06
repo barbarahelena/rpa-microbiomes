@@ -357,5 +357,27 @@ df_new2 <- df_new |>
 
 dim(df_new2)
 
+## Air pollution exposure (RIVM Atlas Leefomgeving, via Gecco data request 2401)
+## Linked via Heliusnr + 1900253 = HELIUS ID - the same offset used for Ext_ID
+## in 1b_datacleaning_biome.R to link 16S samples to this clinical metadata.
+airpol_raw <- haven::read_sav("data/raw/231108b_HELIUS data Barbara Verhaar_GECCO.sav")
+
+airpol <- airpol_raw |>
+  transmute(
+    ID = str_c("S", as.character(Heliusnr + 1900253)),
+    PM10_2013 = conc_ALO_pm10_2013, PM10_2014 = conc_ALO_pm10_2014, PM10_2015 = conc_ALO_pm10_2015,
+    PM25_2013 = conc_ALO_pm25_2013, PM25_2014 = conc_ALO_pm25_2014, PM25_2015 = conc_ALO_pm25_2015,
+    NO2_2014 = conc_ALO_no2_2014, NO2_2015 = conc_ALO_no2_2015,
+    EC_2013 = conc_ALO_ec_2013, EC_2014 = conc_ALO_ec_2014, EC_2015 = conc_ALO_ec_2015,
+    PM10_mean = rowMeans(cbind(PM10_2013, PM10_2014, PM10_2015), na.rm = TRUE),
+    PM25_mean = rowMeans(cbind(PM25_2013, PM25_2014, PM25_2015), na.rm = TRUE),
+    NO2_mean  = rowMeans(cbind(NO2_2014, NO2_2015), na.rm = TRUE),
+    EC_mean   = rowMeans(cbind(EC_2013, EC_2014, EC_2015), na.rm = TRUE)
+  ) |>
+  filter(ID %in% df_new2$ID)
+
+df_new2 <- left_join(df_new2, airpol, by = "ID")
+cat("Air pollution data matched:", sum(!is.na(df_new2$PM25_mean)), "/", nrow(df_new2), "\n")
+
 saveRDS(df_new2, "data/processed/HELIUSmetadata_clean.RDS")
   

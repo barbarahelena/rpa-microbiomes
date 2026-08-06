@@ -69,7 +69,8 @@ keep_groups <- function(ps, min_n = 50) {
 ## structurally NA for all Dutch participants (migration-specific variables),
 ## which would drop the entire Dutch group from complete-case analysis.
 covariates <- c("Age_FU", "Sex", "BMI_FU", "Smoking_FU", "Antibiotics_FU",
-                "ToothBrushing_FU", "TongueBrushing_FU", "Mouthwash_FU")
+                "ToothBrushing_FU", "TongueBrushing_FU", "Mouthwash_FU",
+                "PM10_mean", "PM25_mean", "NO2_mean", "EC_mean")
 
 ## Helper: run linear regression for one metric
 run_regression <- function(df, metric, covariates) {
