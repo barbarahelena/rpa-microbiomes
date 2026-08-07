@@ -17,7 +17,7 @@ meta1 <- haven::read_sav("data/raw/250606_HELIUS data Barbara Verhaar.sav")
 meta2 <- haven::read_sav("data/raw/231108_HELIUS data Barbara Verhaar_GECCO.sav")
 meta2 <- meta2 |> dplyr::select(ID, conc_ALO_pm10_2013:conc_ALO_ec_2015)
 
-pc6 <- read.csv("data/transfer_2649054_files_b3d7bd18/PC6_2022_ALO_2013_2015.csv")
+pc6 <- read.csv("data/raw/PC6_2022_ALO_2013_2015.csv")
 
 ## Map of Amsterdam air pollution by PC6 postcode
 # PC6 geometries: CBS Postcode6 2022 (PDOK), downloaded to data/raw/geo/cbs_pc6_2022.gpkg
