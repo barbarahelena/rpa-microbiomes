@@ -8,6 +8,9 @@ Two microbiome data types from the HELIUS cohort, processed in parallel:
 
 Raw sequencing output and clinical/metadata are cleaned into `phyloseq`/table objects in `data/processed/` (see `scripts/1a_datacleaning_helius.R` and `scripts/1b_datacleaning_biome.R`).
 
+### Upstream read processing
+`scripts/0_run_vsearch.sh` is a SLURM batch script that runs a Nextflow vsearch pipeline (clustering/rarefaction of raw sequencing reads into ASV tables) on the Snellius HPC cluster, ahead of and separate from the `pixi`-managed steps below. Its output feeds into `1a_datacleaning_helius.R`/`1b_datacleaning_biome.R`; submit it with `sbatch scripts/0_run_vsearch.sh`.
+
 ## Analysis pipeline
 Scripts in `scripts/` are numbered in run order:
 
