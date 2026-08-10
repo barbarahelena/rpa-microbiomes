@@ -4,7 +4,7 @@
 ## by ethnicity. Participant addresses/coordinates are not available (GECCO
 ## delivers pre-extracted per-participant values only, not addresses), so
 ## this is a distribution plot rather than a map - the city-wide PC6 map is
-## in 11_airpollution_amsterdam.R.
+## in 4_airpollution_amsterdam.R.
 
 ## Libraries
 library(here)
