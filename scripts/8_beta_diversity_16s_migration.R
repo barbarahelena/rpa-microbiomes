@@ -80,14 +80,17 @@ keep_groups <- function(ps, min_n = 50) {
 ## migrant-specific variables), so they cannot be used in the Dutch vs
 ## South-Asian Surinamese comparison scripts. Here they are screened within
 ## every non-Dutch group with N > 50, pooled.
-## Note: ResidenceDuration_BA and AgeMigration_BA are additionally NA for all
-## 2nd-generation participants (born in the Netherlands, no migration event),
-## so their screen is implicitly restricted to 1st-generation participants
-## via complete-case filtering.
+## Note: ResidenceDuration_BA is additionally NA for all 2nd-generation
+## participants (born in the Netherlands, no migration event), so its screen
+## is implicitly restricted to 1st-generation participants via complete-case
+## filtering. AgeMigration_BA is excluded here: it's more reflective of a
+## participant's current age than of migration/acculturation. Only one of
+## CultDistMeanScore0_BA/CultDistMeanScore6_BA is kept (they're the same
+## underlying score on two different scales) to avoid a confusing duplicate.
 covariates <- c(
-    "ResidenceDuration_BA", "AgeMigration_BA", "DifficultyDutch_BA",
+    "ResidenceDuration_BA", "DifficultyDutch_BA",
     "CultFeelBerrys_BA", "CultOrientBerrys_BA", "CultNetworkBerrys_BA",
-    "CultDistMeanScore0_BA", "CultDistMeanScore6_BA", "DiscrMean_BA"
+    "CultDistMeanScore0_BA", "DiscrMean_BA"
 )
 
 ## ---- Analysis loop over sites ----
@@ -224,20 +227,19 @@ for (site_name in names(sites)) {
 
         ## ---- Full PERMANOVA: ethnicity + migration generation + significant
         ## covariates (ethnicity is forced, not screened - see header) ----
-        ## ResidenceDuration_BA/AgeMigration_BA are structurally NA for every
-        ## 2nd-generation participant (see header), so complete-case
-        ## filtering on either together with MigrationGen drops all 2nd-gen
-        ## rows, leaving MigrationGen with a single level - adonis2 can't fit
-        ## a contrast for that. Keep them out of the joint model even if
-        ## individually significant; their own univariate result (1st-gen
-        ## only, by construction) is already saved in covariate_screen.
-        model_covariates <- setdiff(sig_covariates,
-                                    c("ResidenceDuration_BA", "AgeMigration_BA"))
+        ## ResidenceDuration_BA is structurally NA for every 2nd-generation
+        ## participant (see header), so complete-case filtering on it
+        ## together with MigrationGen drops all 2nd-gen rows, leaving
+        ## MigrationGen with a single level - adonis2 can't fit a contrast
+        ## for that. Keep it out of the joint model even if individually
+        ## significant; its own univariate result (1st-gen only, by
+        ## construction) is already saved in covariate_screen.
+        model_covariates <- setdiff(sig_covariates, "ResidenceDuration_BA")
 
         ## Any other covariate could in principle also happen to be NA for an
         ## entire MigrationGen or EthnicityTotal level in this particular
-        ## complete-case subset - guard generically, not just for the two
-        ## known offenders above, so a 45-min run never dies on this again.
+        ## complete-case subset - guard generically, not just for the known
+        ## offender above, so a 45-min run never dies on this again.
         if (length(model_covariates) > 0) {
             model_vars <- c("EthnicityTotal", "MigrationGen", model_covariates)
             cc_idx <- complete.cases(meta[, model_vars])

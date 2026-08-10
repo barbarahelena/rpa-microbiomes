@@ -8,6 +8,9 @@ Two microbiome data types from the HELIUS cohort, processed in parallel:
 
 Raw sequencing output and clinical/metadata are cleaned into `phyloseq`/table objects in `data/processed/` (see `scripts/1a_datacleaning_helius.R` and `scripts/1b_datacleaning_biome.R`).
 
+### Upstream read processing
+`scripts/0_run_vsearch.sh` is a SLURM batch script that runs a Nextflow vsearch pipeline (clustering/rarefaction of raw sequencing reads into ASV tables) on the Snellius HPC cluster, ahead of and separate from the `pixi`-managed steps below. Its output feeds into `1a_datacleaning_helius.R`/`1b_datacleaning_biome.R`; submit it with `sbatch scripts/0_run_vsearch.sh`.
+
 ## Analysis pipeline
 Scripts in `scripts/` are numbered in run order:
 
@@ -16,15 +19,16 @@ Scripts in `scripts/` are numbered in run order:
 | `1a_datacleaning_helius.R` | Clean HELIUS clinical/metadata | `clean-helius` |
 | `1b_datacleaning_biome.R` | Clean and filter 16S and shotgun microbiome data into `phyloseq` objects | `clean-biome` |
 | `2_tableone.R` | Table 1: cohort characteristics | `tableone` |
-| `3_relative_abundance_plots.R` | Compositional (stacked bar) plots of taxon relative abundance | `relabund-plots` |
-| `4_alpha_diversity_16s_ethnicity.R` | Alpha diversity, 16S throat and nose, stratified by ethnicity | `alpha-16s` |
-| `5_beta_diversity_16s.R` | Beta diversity, 16S throat and nose, stratified by ethnicity (PERMANOVA, betadisper) | `beta-16s` |
-| `6_beta_diversity_16s_migration.R` | Beta diversity, 16S, non-Dutch groups pooled by migration generation/acculturation | `beta-16s-migration` |
-| `7_differential_abundance_16s.R` | Differential abundance, 16S throat and nose, pairwise ethnicity comparisons (MaAsLin2) | `diffabund-16s` |
-| `8_upset_diffabund_16s.R` | Overlap of significant differentially abundant taxa across ethnicity pairs | `upset-diffabund-16s` |
-| `9_alpha_diversity_shotgun.R` | Alpha diversity, shotgun tongue and throat, stratified by ethnicity | `alpha-shotgun` |
-| `10_airpollution_participants.R` | Air pollution exposure distribution among HELIUS participants, overall and by ethnicity | `airpollution-participants` |
-| `11_airpollution_amsterdam.R` | Amsterdam-wide PC6 air pollution map | `airpollution-amsterdam` |
+| `3_airpollution_participants.R` | Air pollution exposure distribution among HELIUS participants, overall and by ethnicity | `airpollution-participants` |
+| `4_airpollution_amsterdam.R` | Amsterdam-wide PC6 air pollution map | `airpollution-amsterdam` |
+| `5_relative_abundance_plots.R` | Compositional (stacked bar) plots of taxon relative abundance | `relabund-plots` |
+| `6_alpha_diversity_16s_ethnicity.R` | Alpha diversity, 16S throat and nose, stratified by ethnicity | `alpha-16s` |
+| `7a_beta_diversity_16s_compute.R` | Beta diversity, 16S throat and nose: permutation-heavy PERMANOVA/betadisper computation, cached to `.rds` | `beta-16s-compute` |
+| `7b_beta_diversity_16s_report.R` | Beta diversity, 16S throat and nose: rebuild plots/tables from cached PERMANOVA/betadisper results (PCoA, betadisper, PERMANOVA, covariate screen, ethnicity attenuation) | `beta-16s-report` |
+| `8_beta_diversity_16s_migration.R` | Beta diversity, 16S, non-Dutch groups pooled by migration generation/acculturation | `beta-16s-migration` |
+| `9_differential_abundance_16s.R` | Differential abundance, 16S throat and nose, pairwise ethnicity comparisons (MaAsLin2) | `diffabund-16s` |
+| `10_upset_diffabund_16s.R` | Overlap of significant differentially abundant taxa across ethnicity pairs | `upset-diffabund-16s` |
+| `11_alpha_diversity_shotgun.R` | Alpha diversity, shotgun tongue and throat, stratified by ethnicity | `alpha-shotgun` |
 
 Shotgun beta diversity and differential abundance analyses, analogous to the 16S ones above, are planned but not yet implemented.
 

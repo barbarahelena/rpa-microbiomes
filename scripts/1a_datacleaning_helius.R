@@ -362,18 +362,24 @@ dim(df_new2)
 ## in 1b_datacleaning_biome.R to link 16S samples to this clinical metadata.
 airpol_raw <- haven::read_sav("data/raw/231108b_HELIUS data Barbara Verhaar_GECCO.sav")
 
+## conc_ALO_* == 0 for every year is a failed-geocoding/missing sentinel in the
+## GECCO export, not a real measurement (urban Amsterdam PM/NO2/EC is never
+## zero) - recode to NA before averaging so it doesn't silently pull means down.
+zero_to_na <- function(x) na_if(x, 0)
+
 airpol <- airpol_raw |>
   transmute(
     ID = str_c("S", as.character(Heliusnr + 1900253)),
-    PM10_2013 = conc_ALO_pm10_2013, PM10_2014 = conc_ALO_pm10_2014, PM10_2015 = conc_ALO_pm10_2015,
-    PM25_2013 = conc_ALO_pm25_2013, PM25_2014 = conc_ALO_pm25_2014, PM25_2015 = conc_ALO_pm25_2015,
-    NO2_2014 = conc_ALO_no2_2014, NO2_2015 = conc_ALO_no2_2015,
-    EC_2013 = conc_ALO_ec_2013, EC_2014 = conc_ALO_ec_2014, EC_2015 = conc_ALO_ec_2015,
+    PM10_2013 = zero_to_na(conc_ALO_pm10_2013), PM10_2014 = zero_to_na(conc_ALO_pm10_2014), PM10_2015 = zero_to_na(conc_ALO_pm10_2015),
+    PM25_2013 = zero_to_na(conc_ALO_pm25_2013), PM25_2014 = zero_to_na(conc_ALO_pm25_2014), PM25_2015 = zero_to_na(conc_ALO_pm25_2015),
+    NO2_2014 = zero_to_na(conc_ALO_no2_2014), NO2_2015 = zero_to_na(conc_ALO_no2_2015),
+    EC_2013 = zero_to_na(conc_ALO_ec_2013), EC_2014 = zero_to_na(conc_ALO_ec_2014), EC_2015 = zero_to_na(conc_ALO_ec_2015),
     PM10_mean = rowMeans(cbind(PM10_2013, PM10_2014, PM10_2015), na.rm = TRUE),
     PM25_mean = rowMeans(cbind(PM25_2013, PM25_2014, PM25_2015), na.rm = TRUE),
     NO2_mean  = rowMeans(cbind(NO2_2014, NO2_2015), na.rm = TRUE),
     EC_mean   = rowMeans(cbind(EC_2013, EC_2014, EC_2015), na.rm = TRUE)
   ) |>
+  mutate(across(c(PM10_mean, PM25_mean, NO2_mean, EC_mean), ~ na_if(as.numeric(.x), NaN))) |>
   filter(ID %in% df_new2$ID)
 
 df_new2 <- left_join(df_new2, airpol, by = "ID")
