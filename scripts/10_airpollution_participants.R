@@ -82,19 +82,76 @@ pollutants <- c(
     EC_mean   = "Soot/EC (µg/m³, 2013-2015 mean)"
 )
 
+## Pairwise Wilcoxon (BH-adjusted) per pollutant - kept in full in the CSV;
+## only p.adj < 0.05 pairs get bracket annotations on the boxplots (with up
+## to 8 ethnicity groups / 28 pairs, showing every pair would be unreadable).
+pairwise_results <- lapply(names(pollutants), function(var) {
+    pw <- pairwise.wilcox.test(meta[[var]], meta$EthnicityTotal, p.adjust.method = "BH")
+    as.data.frame(as.table(pw$p.value)) |>
+        filter(!is.na(Freq)) |>
+        dplyr::rename(group1 = Var1, group2 = Var2, p.adj = Freq) |>
+        mutate(pollutant = var, .before = 1)
+}) |> bind_rows()
+write_csv(pairwise_results, "results/airpollution/participants_pairwise_wilcoxon.csv")
+
 ## One histogram + one ethnicity boxplot per pollutant
+## Vertical headroom above the boxes (Kruskal-Wallis p-value + stacked
+## pairwise brackets) is sized to the number of significant pairs found, via
+## expand(mult = ...) on the y-axis, so labels never get clipped at the top.
 plots <- lapply(names(pollutants), function(var) {
     hist <- ggplot(meta, aes(x = .data[[var]])) +
         geom_histogram(fill = "steelblue", bins = 40) +
         labs(x = pollutants[[var]], y = "Participants", title = pollutants[[var]]) +
         theme_Publication()
 
+    max_val <- max(meta[[var]])
+    min_val <- min(meta[[var]])
+    step <- (max_val - min_val) * 0.12
+
+    ## Brackets stack from just above the boxes upward, most-significant pair
+    ## first; the Kruskal-Wallis omnibus label sits above all of them so it
+    ## never collides with a bracket line. Capped at the 6 most significant
+    ## pairs - beyond that the brackets overlap and become unreadable (full
+    ## pairwise results, capped or not, are always in the CSV).
+    sig_pairs <- pairwise_results |>
+        filter(pollutant == var, p.adj < 0.05) |>
+        arrange(p.adj) |>
+        slice_head(n = 6) |>
+        mutate(
+            group1 = as.character(group1),
+            group2 = as.character(group2),
+            y.position = max_val + step * row_number(),
+            p.adj.label = case_when(
+                p.adj < 0.0001 ~ "****",
+                p.adj < 0.001  ~ "***",
+                p.adj < 0.01   ~ "**",
+                TRUE           ~ "*"
+            )
+        )
+    n_brackets <- nrow(sig_pairs)
+    kruskal_y <- max_val + step * (n_brackets + 1.5)
+
+    ## Bracket y-positions are real data points that ggplot trains the y-scale
+    ## to, so the panel already extends to cover them - a small fixed expand
+    ## on top of that (not scaled by n_brackets) is enough to keep the top
+    ## label clear of the edge without squeezing the boxes down to a sliver.
     box <- ggplot(meta, aes(x = EthnicityTotal, y = .data[[var]], fill = EthnicityTotal)) +
         geom_boxplot(outlier.size = 0.8) +
+        stat_compare_means(method = "kruskal.test", label = "p.format",
+                            label.y = kruskal_y) +
         scale_fill_manual(values = eth_colours, guide = "none") +
         labs(x = NULL, y = pollutants[[var]]) +
+        scale_y_continuous(expand = expansion(mult = c(0.05, 0.15))) +
         theme_Publication() +
         theme(axis.text.x = element_text(angle = 40, hjust = 1))
+
+    if (n_brackets > 0) {
+        box <- box +
+            stat_pvalue_manual(sig_pairs, label = "p.adj.label",
+                                xmin = "group1", xmax = "group2",
+                                y.position = "y.position",
+                                tip.length = 0.01, size = 3)
+    }
 
     ggarrange(hist, box, nrow = 1)
 })
