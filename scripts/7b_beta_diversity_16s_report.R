@@ -1,13 +1,15 @@
-## Beta diversity analysis: 16S microbiome (throat and nose)
-## Stratified by ethnicity (all groups with N > 50 per site)
-## with PERMANOVA (omnibus + pairwise), covariate screening, and betadisper
+## Beta diversity analysis: 16S microbiome (throat and nose) - REPORT STEP
+## Reads the .rds cache written by 7a_beta_diversity_16s_compute.R and builds
+## every plot and table (PCoA, betadisper, PERMANOVA tables/heatmaps,
+## covariate screen, ethnicity attenuation) without repeating any permutation
+## test. Run 5a first (or via the beta-16s pixi task, which chains both).
 
 ## Libraries
 library(here)
 library(tidyverse)
 library(phyloseq)
-library(vegan)
-library(parallel)
+library(grid)
+library(ggthemes)
 
 ## Functions
 theme_Publication <- function(base_size=14, base_family="sans") {
@@ -44,41 +46,15 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 ## Setup
 setwd(here::here())
 
-## Test mode: set BETA_DIV_TEST_N to cap each ethnicity group at N samples
-## after group-size filtering, so the full pipeline runs in seconds instead
-## of many minutes. Writes to a separate results dir so it can never clobber
-## a real run. Example: BETA_DIV_TEST_N=40 Rscript scripts/7_beta_diversity_16s.R
+## Test mode must match the outdir 7a_beta_diversity_16s_compute.R wrote the
+## cache to. Example: BETA_DIV_TEST_N=40 Rscript scripts/7b_beta_diversity_16s_report.R
 test_n <- suppressWarnings(as.integer(Sys.getenv("BETA_DIV_TEST_N", "")))
 outdir <- if (!is.na(test_n)) "results/beta_diversity_test" else "results/beta_diversity"
-if (!is.na(test_n)) cat("TEST MODE: capping each group at", test_n, "samples, writing to", outdir, "\n")
+if (!is.na(test_n)) cat("TEST MODE: reading/writing", outdir, "\n")
 
 for (sub in c("pcoa", "permanova", "covariate_screen", "betadisper")) {
     dir.create(file.path(outdir, sub), recursive = TRUE, showWarnings = FALSE)
 }
-
-## Number of cores for parallelizing independent PERMANOVA calls (covariate
-## screening, pairwise post-hoc, and the big omnibus/adjusted models via
-## adonis2's own `parallel` arg). detectCores() reliably returns NA when
-## sandboxed, so this is hardcoded for this 10-core machine (override with
-## BETA_DIV_N_CORES) rather than relying on runtime detection.
-n_cores <- suppressWarnings(as.integer(Sys.getenv("BETA_DIV_N_CORES", "8")))
-if (is.na(n_cores)) n_cores <- 1
-
-## Fail fast if the parallel setup is broken
-self_test <- tryCatch({
-    worker_out <- mclapply(1:4, function(i) i, mc.cores = n_cores)
-    if (any(vapply(worker_out, function(x) inherits(x, "try-error"), logical(1))))
-        stop("mclapply worker(s) failed")
-    test_dist <- dist(matrix(rnorm(16), nrow = 4))
-    test_grp  <- factor(c("a", "a", "b", "b"))
-    adonis2(test_dist ~ test_grp, permutations = 9, parallel = n_cores)
-    TRUE
-}, error = function(e) e)
-if (!isTRUE(self_test)) {
-    stop("Parallel setup self-test failed (n_cores = ", n_cores, "): ",
-         conditionMessage(self_test))
-}
-cat("Parallel setup OK - n_cores =", n_cores, "\n")
 
 ## Define ethnicity colours
 eth_colours <- c(
@@ -100,73 +76,38 @@ cat_palette <- unname(eth_colours)
 ## Colours for the two distance metrics in the covariate-effect summary plot
 dist_colours <- c("Bray-Curtis" = "#2a78d6", "Weighted UniFrac" = "#eb6834")
 
-## Keep only ethnicity groups with more than n=50 samples (matches Table 1)
-keep_groups <- function(ps, min_n = 50) { # this means categories such as Javanese Surinamese and Other are excluded
-    counts <- table(sample_data(ps)$EthnicityTotal)
-    names(counts)[counts > min_n]
-}
-
-## Pairwise PERMANOVA between every pair of groups (BH-adjusted).
-## Pairs are independent, so run them across cores.
-pairwise_permanova <- function(dist_mat, meta, group_var = "EthnicityTotal", n_cores = 1) {
-    groups <- levels(droplevels(meta[[group_var]]))
-    pairs <- combn(groups, 2, simplify = FALSE)
-    mclapply(pairs, function(pair) {
-        idx <- meta[[group_var]] %in% pair
-        d_sub <- as.dist(as.matrix(dist_mat)[idx, idx])
-        m_sub <- meta[idx, ] |> mutate(across(where(is.factor), droplevels))
-        fit <- adonis2(as.formula(paste("d_sub ~", group_var)),
-                        data = m_sub, permutations = 999)
-        tibble(group1 = pair[1], group2 = pair[2],
-               R2 = fit$R2[1], F_stat = fit$F[1], p.value = fit[["Pr(>F)"]][1])
-    }, mc.cores = n_cores) |> bind_rows() |> mutate(p.adj = p.adjust(p.value, method = "BH"))
-}
-
-## Pairwise PERMANOVA between every pair of groups, adjusted for covariates
-## (entered before the group term so the group's R2/p reflect its effect net
-## of those covariates, matching the ethnicity-net-of-covariate convention
-## used by the migration script's adjusted model). `covariates` is expected
-## to be the significant covariates from this site x distance's screen (see
-## sig_covariates in compute_permanova_block). Falls back to the unadjusted
-## group-only model for a pair when complete-case filtering on the
-## covariates collapses the group variable or a covariate to a single level
-## within that pair.
-pairwise_permanova_adjusted <- function(dist_mat, meta, covariates, unadjusted,
-                                         group_var = "EthnicityTotal", n_cores = 1) {
-    if (length(covariates) == 0) return(unadjusted)
-
-    groups <- levels(droplevels(meta[[group_var]]))
-    pairs <- combn(groups, 2, simplify = FALSE)
-    mclapply(pairs, function(pair) {
-        idx <- meta[[group_var]] %in% pair & complete.cases(meta[, covariates, drop = FALSE])
-        m_sub <- meta[idx, ] |> mutate(across(where(is.factor), droplevels))
-
-        group_ok <- nlevels(m_sub[[group_var]]) >= 2
-        cov_ok <- vapply(covariates, function(cov) {
-            v <- m_sub[[cov]]
-            if (is.factor(v)) nlevels(v) >= 2 else length(unique(v)) >= 2
-        }, logical(1))
-
-        if (!group_ok || !all(cov_ok)) {
-            idx_unadj <- meta[[group_var]] %in% pair
-            d_unadj <- as.dist(as.matrix(dist_mat)[idx_unadj, idx_unadj])
-            m_unadj <- meta[idx_unadj, ] |> mutate(across(where(is.factor), droplevels))
-            fit <- adonis2(as.formula(paste("d_unadj ~", group_var)),
-                            data = m_unadj, permutations = 999)
-            return(tibble(group1 = pair[1], group2 = pair[2],
-                           R2 = fit$R2[1], F_stat = fit$F[1],
-                           p.value = fit[["Pr(>F)"]][1]))
-        }
-
-        d_sub <- as.dist(as.matrix(dist_mat)[idx, idx])
-        fit <- adonis2(as.formula(paste("d_sub ~", paste(covariates, collapse = " + "),
-                                        "+", group_var)),
-                        data = m_sub, permutations = 999, by = "terms")
-        tibble(group1 = pair[1], group2 = pair[2],
-               R2 = fit[group_var, "R2"], F_stat = fit[group_var, "F"],
-               p.value = fit[group_var, "Pr(>F)"])
-    }, mc.cores = n_cores) |> bind_rows() |> mutate(p.adj = p.adjust(p.value, method = "BH"))
-}
+## Human-readable labels for plots (raw variable names stay in filenames/CSVs)
+covariate_labels <- c(
+    Age_FU               = "Age",
+    Sex                  = "Sex",
+    BMI_FU               = "BMI",
+    Smoking_FU           = "Smoking status",
+    AlcoholYN_FU         = "Alcohol use",
+    SBP_FU               = "Systolic blood pressure",
+    DBP_FU               = "Diastolic blood pressure",
+    HTSelfBP_FU          = "Hypertension",
+    DMSelfGluc_FU        = "Diabetes",
+    MetSyn_FU            = "Metabolic syndrome",
+    Antibiotics_FU       = "Antibiotics use",
+    Antihypertensiva_FU  = "Blood pressure lowering drugs",
+    Lipidlowering_FU     = "Lipid lowering drugs",
+    Corticosteroids_FU   = "Corticosteroids use",
+    SystemicSteroids_FU  = "Systemic steroids use",
+    Antihistamines_FU    = "Antihistamines use",
+    DecongAllerg_FU      = "Decongestant/allergy medication",
+    Antidepressants_FU   = "Antidepressants use",
+    Psychotropics_FU     = "Psychotropic medication use",
+    ToothBrushing_FU     = "Tooth brushing frequency",
+    TongueBrushing_FU    = "Tongue brushing frequency",
+    Mouthwash_FU         = "Mouthwash use",
+    OralHealth_FU        = "Self-rated oral health",
+    Nasal_FU             = "Nasal medication use",
+    PM10_mean            = "PM10 (2013-2015 mean)",
+    PM25_mean            = "PM2.5 (2013-2015 mean)",
+    NO2_mean             = "NO2 (2014-2015 mean)",
+    EC_mean              = "Soot/EC (2013-2015 mean)",
+    EthnicityTotal       = "Ethnicity"
+)
 
 ## Word-wraps a title/subtitle to a fixed character width so it fits inside
 ## the plot instead of running off the page, and reports how many lines the
@@ -228,216 +169,43 @@ pairwise_permanova_heatmap <- function(pairwise_df, groups_order, title, subtitl
     p
 }
 
-## Bundles every permutation-heavy PERMANOVA/betadisper call for one site x
-## distance-metric combination into a single object.
-compute_permanova_block <- function(dist_mat, meta, covariates, n_cores) {
-    ## ---- PERMANOVA: ethnicity only (omnibus across all groups) ----
-    permanova_eth <- adonis2(
-        dist_mat ~ EthnicityTotal,
-        data = meta,
-        permutations = 999,
-        parallel = n_cores,
-        by = "terms"
-    )
-
-    ## ---- PERMANOVA: pairwise post-hoc between every pair of groups ----
-    permanova_pairwise <- pairwise_permanova(dist_mat, meta, n_cores = n_cores)
-
-    ## ---- Covariate screening (individual PERMANOVA per covariate) ----
-    covariate_screen <- mclapply(covariates, function(cov) {
-        ## Use complete cases for this covariate
-        cc_idx <- !is.na(meta[[cov]])
-        if (sum(cc_idx) < 10) return(NULL)
-
-        meta_cc <- meta[cc_idx, ] |>
-            mutate(across(where(is.factor), droplevels))
-
-        ## Check covariate has >= 2 levels
-        vals <- meta_cc[[cov]]
-        if (is.factor(vals) && nlevels(vals) < 2) return(NULL)
-        if (!is.factor(vals) && length(unique(vals)) < 2) return(NULL)
-
-        dist_cc <- as.dist(as.matrix(dist_mat)[cc_idx, cc_idx])
-
-        formula <- as.formula(paste("dist_cc ~", cov))
-        res <- adonis2(formula, data = meta_cc, permutations = 999)
-        tibble(
-            covariate = cov,
-            Df        = res$Df[1],
-            R2        = res$R2[1],
-            F_stat    = res$F[1],
-            p.value   = res[["Pr(>F)"]][1]
-        )
-    }, mc.cores = n_cores) |> bind_rows()
-
-    sig_covariates <- covariate_screen |>
-        filter(p.value < 0.05) |>
-        pull(covariate)
-
-    ## ---- Full PERMANOVA: ethnicity + significant covariates ----
-    if (length(sig_covariates) > 0) {
-        model_vars <- c("EthnicityTotal", sig_covariates)
-        cc_idx <- complete.cases(meta[, model_vars])
-        meta_cc <- meta[cc_idx, ] |>
-            mutate(across(where(is.factor), droplevels))
-        dist_cc <- as.dist(as.matrix(dist_mat)[cc_idx, cc_idx])
-
-        permanova_full <- adonis2(
-            as.formula(paste("dist_cc ~ EthnicityTotal +",
-                             paste(sig_covariates, collapse = " + "))),
-            data = meta_cc,
-            permutations = 999,
-            parallel = n_cores,
-            by = "terms"
-        )
-    } else {
-        permanova_full <- permanova_eth
+## ---- Report loop over sites: throat and nose ----
+for (site_name in c("throat", "nose")) {
+    cache_path <- file.path(outdir, "cache", paste0("beta_diversity_16s_", site_name, ".rds"))
+    if (!file.exists(cache_path)) {
+        stop("No cache for '", site_name, "' at ", cache_path,
+             " - run scripts/7a_beta_diversity_16s_compute.R first.")
     }
+    cache <- readRDS(cache_path)
+    meta      <- cache$meta
+    n_samples <- cache$n_samples
+    group_ns  <- cache$group_ns
+    distances <- cache$distances
+    pcoas     <- cache$pcoas
+    blocks    <- cache$blocks
 
-    ## ---- PERMANOVA pairwise post-hoc, adjusted for significant covariates ----
-    permanova_pairwise_adjusted <- pairwise_permanova_adjusted(
-        dist_mat, meta, sig_covariates, unadjusted = permanova_pairwise,
-        n_cores = n_cores
-    )
-
-    ## ---- Betadisper: test homogeneity of dispersions (omnibus + pairwise) ----
-    betadisp <- betadisper(dist_mat, meta$EthnicityTotal)
-    betadisp_test <- permutest(betadisp, permutations = 999, parallel = n_cores)
-    betadisp_pairwise <- as.data.frame(TukeyHSD(betadisp)$group) |>
-        rownames_to_column("pair")
-
-    list(
-        permanova_eth               = permanova_eth,
-        permanova_pairwise          = permanova_pairwise,
-        permanova_pairwise_adjusted = permanova_pairwise_adjusted,
-        covariate_screen            = covariate_screen,
-        sig_covariates              = sig_covariates,
-        permanova_full              = permanova_full,
-        betadisp                    = betadisp,
-        betadisp_test               = betadisp_test,
-        betadisp_pairwise           = betadisp_pairwise
-    )
-}
-
-## Covariates to screen
-## MigrationGen and ResidenceDuration_BA are excluded because NA for Dutch
-covariates <- c(
-    # Demographics
-    "Age_FU", "Sex", "BMI_FU",
-
-    # Cardiometabolic risk factors
-    "Smoking_FU", "AlcoholYN_FU", "SBP_FU", "DBP_FU",
-    "HTSelfBP_FU", "DMSelfGluc_FU", "MetSyn_FU",
-
-    # Medication
-    "Antibiotics_FU", "Antihypertensiva_FU", "Lipidlowering_FU",
-    "Corticosteroids_FU", "SystemicSteroids_FU", "Antihistamines_FU",
-    "DecongAllerg_FU", "Antidepressants_FU", "Psychotropics_FU",
-
-    # Mouth and nose variables
-    "ToothBrushing_FU", "TongueBrushing_FU", "Mouthwash_FU",
-    "OralHealth_FU", "Nasal_FU",
-
-    # Air pollution exposure (RIVM ALO, 2013-2015 address-based mean)
-    "PM10_mean", "PM25_mean", "NO2_mean", "EC_mean"
-)
-
-## Human-readable labels for plots (raw variable names stay in filenames/CSVs)
-covariate_labels <- c(
-    Age_FU               = "Age",
-    Sex                  = "Sex",
-    BMI_FU               = "BMI",
-    Smoking_FU           = "Smoking status",
-    AlcoholYN_FU         = "Alcohol use",
-    SBP_FU               = "Systolic blood pressure",
-    DBP_FU               = "Diastolic blood pressure",
-    HTSelfBP_FU          = "Hypertension",
-    DMSelfGluc_FU        = "Diabetes",
-    MetSyn_FU            = "Metabolic syndrome",
-    Antibiotics_FU       = "Antibiotics use",
-    Antihypertensiva_FU  = "Blood pressure lowering drugs",
-    Lipidlowering_FU     = "Lipid lowering drugs",
-    Corticosteroids_FU   = "Corticosteroids use",
-    SystemicSteroids_FU  = "Systemic steroids use",
-    Antihistamines_FU    = "Antihistamines use",
-    DecongAllerg_FU      = "Decongestant/allergy medication",
-    Antidepressants_FU   = "Antidepressants use",
-    Psychotropics_FU     = "Psychotropic medication use",
-    ToothBrushing_FU     = "Tooth brushing frequency",
-    TongueBrushing_FU    = "Tongue brushing frequency",
-    Mouthwash_FU         = "Mouthwash use",
-    OralHealth_FU        = "Self-rated oral health",
-    Nasal_FU             = "Nasal medication use",
-    PM10_mean            = "PM10 (2013-2015 mean)",
-    PM25_mean            = "PM2.5 (2013-2015 mean)",
-    NO2_mean             = "NO2 (2014-2015 mean)",
-    EC_mean              = "Soot/EC (2013-2015 mean)",
-    EthnicityTotal       = "Ethnicity"
-)
-
-## ---- Analysis loop over sites: throat and nose ----
-sites <- list(
-    throat = readRDS("data/processed/ps_throat_rarefied.RDS"),
-    nose   = readRDS("data/processed/ps_nose_rarefied.RDS")
-)
-
-for (site_name in names(sites)) {
-    ps <- sites[[site_name]]
-
-    ## Filter to ethnicity groups with N > 50 in this site
-    ps <- subset_samples(ps, EthnicityTotal %in% keep_groups(ps))
-
-    ## Extract metadata and drop unused factor levels
-    meta <- sample_data(ps) |>
-        as("data.frame") |>
-        mutate(EthnicityTotal = droplevels(factor(EthnicityTotal)))
-    sample_data(ps) <- sample_data(meta)
-
-    ## Test mode: cap each group at test_n samples (group eligibility above
-    ## was already decided from the full data - every group here has > 50
-    ## samples, so test_n is always <= the group size)
-    if (!is.na(test_n)) {
-        set.seed(42)
-        keep_samples <- meta |>
-            rownames_to_column("sample_id") |>
-            group_by(EthnicityTotal) |>
-            slice_sample(n = test_n) |>
-            pull(sample_id)
-        ps <- prune_samples(keep_samples, ps)
-        meta <- sample_data(ps) |>
-            as("data.frame") |>
-            mutate(EthnicityTotal = droplevels(factor(EthnicityTotal)))
-        sample_data(ps) <- sample_data(meta)
-    }
-
-    n_samples <- nsamples(ps)
-    group_ns <- meta |> count(EthnicityTotal, name = "n") |> arrange(desc(n))
     cat("Groups (N>50) for", site_name, ":", paste(group_ns$EthnicityTotal, collapse = ", "), "\n")
-
-    ## ---- Compute distance matrices ----
-    distances <- list(
-        "Bray-Curtis"      = phyloseq::distance(ps, method = "bray"),
-        "Weighted UniFrac" = phyloseq::distance(ps, method = "wunifrac")
-    )
 
     ## Collects ethnicity + covariate PERMANOVA R2/p from both distance
     ## metrics, for the covariate-effect summary plot built after this loop.
     covariate_screen_all <- list()
 
+    ## Collects ethnicity-attenuation results from both distance metrics, for
+    ## the attenuation summary plot built after this loop.
+    ethnicity_attenuation_all <- list()
+
     for (dist_name in names(distances)) {
         dist_mat <- distances[[dist_name]]
         dist_label <- tolower(gsub("[- ]", "_", dist_name))
+        pcoa <- pcoas[[dist_name]]
 
-        ## ---- PERMANOVA (omnibus + pairwise), covariate screen, betadisper ----
-        ## Every 999-permutation call for this site x distance combination is
-        ## bundled into one object - the single most expensive step in this
-        ## script.
-        block <- compute_permanova_block(dist_mat, meta, covariates, n_cores)
+        block <- blocks[[dist_name]]
         permanova_eth               <- block$permanova_eth
         permanova_pairwise          <- block$permanova_pairwise
         permanova_pairwise_adjusted <- block$permanova_pairwise_adjusted
         covariate_screen            <- block$covariate_screen
         sig_covariates              <- block$sig_covariates
+        ethnicity_attenuation       <- block$ethnicity_attenuation
         permanova_full              <- block$permanova_full
         betadisp                    <- block$betadisp
         betadisp_test               <- block$betadisp_test
@@ -449,7 +217,6 @@ for (site_name in names(sites)) {
         )
 
         ## ---- PCoA ordination ----
-        pcoa <- ordinate(ps, method = "PCoA", distance = dist_mat)
         eig <- pcoa$values$Eigenvalues
         var_explained <- round(100 * eig / sum(eig), 1)
 
@@ -595,6 +362,15 @@ for (site_name in names(sites)) {
                   paste0(outdir, "/covariate_screen/covariate_screen_", dist_label,
                          "_16s_", site_name, ".csv"))
 
+        ## Ethnicity attenuation: which covariates explain the most of
+        ## ethnicity's effect on beta diversity (see ethnicity_attenuation()
+        ## in scripts/7a_beta_diversity_16s_compute.R)
+        write_csv(ethnicity_attenuation,
+                  paste0(outdir, "/covariate_screen/ethnicity_attenuation_", dist_label,
+                         "_16s_", site_name, ".csv"))
+        ethnicity_attenuation_all[[dist_name]] <- ethnicity_attenuation |>
+            mutate(distance = dist_name)
+
         ## Betadisper
         betadisp_df <- tibble(
             F_stat  = betadisp_test$tab$F[1],
@@ -706,6 +482,52 @@ for (site_name in names(sites)) {
         theme_Publication()
     ggsave(paste0(outdir, "/permanova/permanova_summary_16s_", site_name, ".pdf"),
            width = 8, height = max(6, 0.3 * n_terms + 2))
+
+    ## ---- Summary plot: ethnicity attenuation by covariate, across both
+    ## distance metrics. abs_reduction is how much ethnicity's PERMANOVA R2
+    ## drops once that one covariate is adjusted for - the covariate most
+    ## responsible for confounding the ethnicity effect on beta diversity has
+    ## the largest bar. ----
+    attenuation_effects <- bind_rows(ethnicity_attenuation_all)
+
+    attenuation_order <- attenuation_effects |>
+        group_by(covariate) |>
+        summarise(max_reduction = max(abs_reduction), .groups = "drop") |>
+        arrange(max_reduction) |>
+        pull(covariate)
+    attenuation_effects <- attenuation_effects |>
+        mutate(covariate_label = covariate_labels[covariate],
+               covariate_label = factor(covariate_label,
+                                        levels = covariate_labels[attenuation_order]),
+               significant = p_value < 0.05)
+
+    write_csv(attenuation_effects,
+              paste0(outdir, "/permanova/ethnicity_attenuation_summary_16s_", site_name, ".csv"))
+
+    n_atten_terms <- n_distinct(attenuation_effects$covariate_label)
+    ## Wrapped and shrunk the same way pairwise_permanova_heatmap() handles
+    ## its subtitle - theme_Publication() doesn't style plot.subtitle at all,
+    ## so left at ggplot2's default size it runs off an 8" wide plot.
+    atten_subtitle <- wrap_for_plot(
+        "Drop in ethnicity's PERMANOVA R2 when adjusted for that covariate alone",
+        width = 75
+    )
+    ggplot(attenuation_effects, aes(x = covariate_label, y = abs_reduction, fill = distance,
+                                     colour = distance, alpha = significant)) +
+        geom_col(position = position_dodge(width = 0.7), width = 0.6, linewidth = 0.6) +
+        coord_flip() +
+        scale_fill_manual(values = dist_colours) +
+        scale_colour_manual(values = dist_colours, guide = "none") +
+        scale_alpha_manual(values = c(`TRUE` = 1, `FALSE` = 0), guide = "none") +
+        labs(x = NULL, y = expression("Reduction in ethnicity" ~ R^2),
+             fill = "Distance metric",
+             title = paste0("Ethnicity attenuation by covariate - 16S ", site_name),
+             subtitle = atten_subtitle$text,
+             caption = "Filled bars: p < 0.05 for ethnicity net of covariate (PERMANOVA)") +
+        theme_Publication() +
+        theme(plot.subtitle = element_text(size = rel(0.6), face = "italic", hjust = 0.5))
+    ggsave(paste0(outdir, "/permanova/ethnicity_attenuation_summary_16s_", site_name, ".pdf"),
+           width = 8, height = max(6, 0.3 * n_atten_terms + 2) + 0.17 * atten_subtitle$n_lines)
 
     cat("Finished site:", site_name, "-", n_samples, "samples\n\n")
 }
