@@ -23,7 +23,9 @@ beta-16s-migration = { cmd = "Rscript scripts/8_beta_diversity_16s_migration.R",
 diffabund-16s = { cmd = "Rscript scripts/9_differential_abundance_16s.R", depends-on = ["clean-biome"], description = "Differential abundance, 16S throat/nose, pairwise ethnicity comparisons (MaAsLin2)" }
 upset-diffabund-16s = { cmd = "Rscript scripts/10_upset_diffabund_16s.R", depends-on = ["diffabund-16s"], description = "Overlap of significant differentially abundant taxa across ethnicity pairs" }
 alpha-shotgun = { cmd = "Rscript scripts/11_alpha_diversity_shotgun.R", depends-on = ["clean-biome"], description = "Alpha diversity, shotgun tongue/throat, stratified by ethnicity" }
-pipeline = { depends-on = ["tableone", "airpollution-participants", "airpollution-amsterdam", "relabund-plots", "alpha-16s", "beta-16s", "beta-16s-migration", "upset-diffabund-16s", "alpha-shotgun"], description = "Run the full analysis pipeline end to end" }
+figure1 = { cmd = "Rscript scripts/12_figure1_assembly.R", depends-on = ["clean-biome", "beta-16s-compute"], description = "Assemble Figure 1: Shannon diversity, weighted UniFrac PCoA, and betadisper panels (16S throat/nose)" }
+figure2 = { cmd = "Rscript scripts/13_figure2_assembly.R", depends-on = ["beta-16s-compute"], description = "Assemble Figure 2: pairwise PERMANOVA (weighted UniFrac) and covariate effects on beta diversity (16S throat/nose)" }
+pipeline = { depends-on = ["tableone", "airpollution-participants", "airpollution-amsterdam", "relabund-plots", "alpha-16s", "beta-16s", "beta-16s-migration", "upset-diffabund-16s", "alpha-shotgun", "figure1", "figure2"], description = "Run the full analysis pipeline end to end" }
 
 [dependencies]
 bioconductor-phyloseq = { version = ">=1.50.0,<2", channel = "bioconda" }
@@ -46,3 +48,4 @@ r-upsetr = ">=1.4.1,<2"
 r-sf = ">=1.0_19,<2"
 r-leaflet = ">=2.2.2,<3"
 r-htmlwidgets = ">=1.6.4,<2"
+r-cowplot = ">=1.2.0,<2"
