@@ -100,11 +100,8 @@ sites <- list(
     nose   = readRDS("data/processed/ps_nose_rarefied.RDS")
 )
 
-rarefaction_depths <- c(throat = 7500, nose = 2000)
-
 for (site_name in names(sites)) {
     ps <- sites[[site_name]]
-    rare_depth <- rarefaction_depths[[site_name]]
 
     ## Filter to ethnicity groups with N > 50 in this site
     ps <- subset_samples(ps, EthnicityTotal %in% keep_groups(ps))
@@ -195,7 +192,7 @@ for (site_name in names(sites)) {
         mutate(
             group1 = as.character(group1),
             group2 = as.character(group2),
-            step = (max_val - min_val) * 0.12,
+            step = (max_val - min_val) * 0.06,
             y.position = max_val + step * row_number(),
             p.adj.label = case_when(
                 p.adj < 0.0001 ~ "****",
@@ -211,23 +208,20 @@ for (site_name in names(sites)) {
         stat_compare_means(method = "kruskal.test", label = "p.format") +
         facet_wrap(~ metric, scales = "free_y", nrow = 1) +
         scale_fill_manual(values = eth_colours) +
-        labs(x = NULL, y = "Value", fill = "Ethnicity",
-             title = paste0("Alpha diversity by ethnicity - 16S ", site_name),
-             caption = paste0("Rarefied to ", format(rare_depth, big.mark = ","),
-                              " reads/sample. Kruskal-Wallis omnibus test across all groups; ",
-                              "brackets show pairwise Wilcoxon (BH-adjusted) p < 0.05 only - ",
-                              "full pairwise results in results CSV.")) +
+        labs(x = NULL, y = "Value",
+             title = paste0("Alpha diversity by ethnicity - 16S ", site_name)) +
         scale_y_continuous(expand = expansion(mult = c(0.05, 0.2))) +
-        guides(fill = guide_legend(nrow = 2, byrow = TRUE)) +
         theme_Publication() +
-        theme(axis.text.x = element_text(angle = 25, hjust = 1))
+        theme(legend.position = "none",
+              axis.text.x = element_text(angle = 25, hjust = 1))
 
     if (nrow(sig_pairs) > 0) {
         p_box <- p_box +
             ggpubr::stat_pvalue_manual(sig_pairs, label = "p.adj.label",
                                         xmin = "group1", xmax = "group2",
                                         y.position = "y.position",
-                                        tip.length = 0.01, size = 3)
+                                        tip.length = 0, size = 3,
+                                        color = "grey30")
     }
 
     ggsave(paste0("results/alpha_diversity/alpha_diversity_boxplot_16s_",
@@ -241,13 +235,11 @@ for (site_name in names(sites)) {
                      outlier.shape = 21, outlier.size = 0.8) +
         facet_wrap(~ metric, scales = "free_y", nrow = 1) +
         scale_fill_manual(values = eth_colours) +
-        labs(x = NULL, y = "Value", fill = "Ethnicity",
-             title = paste0("Alpha diversity distribution - 16S ", site_name),
-             caption = paste0("Rarefied to ", format(rare_depth, big.mark = ","),
-                              " reads/sample")) +
-        guides(fill = guide_legend(nrow = 2, byrow = TRUE)) +
+        labs(x = NULL, y = "Value",
+             title = paste0("Alpha diversity distribution - 16S ", site_name)) +
         theme_Publication() +
-        theme(axis.text.x = element_text(angle = 25, hjust = 1))
+        theme(legend.position = "none",
+              axis.text.x = element_text(angle = 25, hjust = 1))
     ggsave(paste0("results/alpha_diversity/alpha_diversity_violin_16s_",
                   site_name, "_ethnicity.pdf"),
            width = 12, height = 6.5)
