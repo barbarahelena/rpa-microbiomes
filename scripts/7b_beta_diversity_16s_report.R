@@ -505,13 +505,6 @@ for (site_name in c("throat", "nose")) {
               paste0(outdir, "/permanova/ethnicity_attenuation_summary_16s_", site_name, ".csv"))
 
     n_atten_terms <- n_distinct(attenuation_effects$covariate_label)
-    ## Wrapped and shrunk the same way pairwise_permanova_heatmap() handles
-    ## its subtitle - theme_Publication() doesn't style plot.subtitle at all,
-    ## so left at ggplot2's default size it runs off an 8" wide plot.
-    atten_subtitle <- wrap_for_plot(
-        "Drop in ethnicity's PERMANOVA R2 when adjusted for that covariate alone",
-        width = 75
-    )
     ggplot(attenuation_effects, aes(x = covariate_label, y = abs_reduction, fill = distance,
                                      colour = distance, alpha = significant)) +
         geom_col(position = position_dodge(width = 0.7), width = 0.6, linewidth = 0.6) +
@@ -522,12 +515,10 @@ for (site_name in c("throat", "nose")) {
         labs(x = NULL, y = expression("Reduction in ethnicity" ~ R^2),
              fill = "Distance metric",
              title = paste0("Ethnicity attenuation by covariate - 16S ", site_name),
-             subtitle = atten_subtitle$text,
              caption = "Filled bars: p < 0.05 for ethnicity net of covariate (PERMANOVA)") +
-        theme_Publication() +
-        theme(plot.subtitle = element_text(size = rel(0.6), face = "italic", hjust = 0.5))
+        theme_Publication()
     ggsave(paste0(outdir, "/permanova/ethnicity_attenuation_summary_16s_", site_name, ".pdf"),
-           width = 8, height = max(6, 0.3 * n_atten_terms + 2) + 0.17 * atten_subtitle$n_lines)
+           width = 8, height = max(6, 0.3 * n_atten_terms + 2))
 
     cat("Finished site:", site_name, "-", n_samples, "samples\n\n")
 }
