@@ -70,7 +70,7 @@ keep_groups <- function(ps, min_n = 50) {
 ## which would drop the entire Dutch group from complete-case analysis.
 covariates <- c("Age_FU", "Sex", "BMI_FU", "Smoking_FU", "Antibiotics_FU",
                 "ToothBrushing_FU", "TongueBrushing_FU", "Mouthwash_FU",
-                "PM10_mean", "PM25_mean", "NO2_mean", "EC_mean")
+                "PM10_mean", "PM25_mean", "NO2_mean", "EC_mean", "Season")
 
 ## Helper: run linear regression for one metric
 run_regression <- function(df, metric, covariates) {
@@ -167,7 +167,7 @@ for (site_name in names(sites)) {
             pw <- pairwise.wilcox.test(.x$value, .x$EthnicityTotal, p.adjust.method = "BH")
             as.data.frame(as.table(pw$p.value)) |>
                 filter(!is.na(Freq)) |>
-                rename(group1 = Var1, group2 = Var2, p.adj = Freq)
+                dplyr::rename(group1 = Var1, group2 = Var2, p.adj = Freq)
         }) |>
         ungroup()
     write_csv(pairwise_results,

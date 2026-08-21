@@ -12,7 +12,7 @@ install-maaslin2 = "R -e \"BiocManager::install('Maaslin2', ask=FALSE, update=FA
 clean-helius = { cmd = "Rscript scripts/1a_datacleaning_helius.R", description = "Clean HELIUS clinical/metadata" }
 clean-biome = { cmd = "Rscript scripts/1b_datacleaning_biome.R", depends-on = ["clean-helius"], description = "Clean and filter 16S and shotgun microbiome data into phyloseq objects" }
 tableone = { cmd = "Rscript scripts/2_tableone.R", depends-on = ["clean-biome"], description = "Table 1: cohort characteristics" }
-airpollution-participants = { cmd = "Rscript scripts/3_airpollution_participants.R", depends-on = ["clean-helius"], description = "Air pollution exposure distribution among HELIUS participants" }
+airpollution-participants = { cmd = "Rscript scripts/3_airpollution_participants.R", depends-on = ["clean-helius", "clean-biome"], description = "Air pollution exposure distribution among HELIUS participants, and swab collection seasonality by ethnicity (16S throat/nose)" }
 airpollution-amsterdam = { cmd = "Rscript scripts/4_airpollution_amsterdam.R", description = "Amsterdam-wide PC6 air pollution map" }
 relabund-plots = { cmd = "Rscript scripts/5_relative_abundance_plots.R", depends-on = ["clean-biome"], description = "Compositional (stacked bar) plots of taxon relative abundance" }
 alpha-16s = { cmd = "Rscript scripts/6_alpha_diversity_16s_ethnicity.R", depends-on = ["clean-biome"], description = "Alpha diversity, 16S throat/nose, stratified by ethnicity" }

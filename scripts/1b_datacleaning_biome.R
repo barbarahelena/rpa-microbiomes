@@ -51,6 +51,19 @@ dir.create("results/rarefaction", recursive = TRUE, showWarnings = FALSE)
 meta <- rio::import("data/raw/sample_sheet_withmeta.csv")
 names(meta)
 meta$sample <- str_c("S", meta$sample)
+
+# Derive sample collection season (meteorological, Northern Hemisphere) from
+# the swab collection date
+meta$Collection_Date <- as.Date(na_if(meta$Collection_Date, ""), format = "%Y_%m_%d")
+meta$Season <- case_when(
+    month(meta$Collection_Date) %in% c(12, 1, 2) ~ "Winter",
+    month(meta$Collection_Date) %in% c(3, 4, 5)  ~ "Spring",
+    month(meta$Collection_Date) %in% c(6, 7, 8)  ~ "Summer",
+    month(meta$Collection_Date) %in% c(9, 10, 11) ~ "Autumn"
+)
+meta$Season <- factor(meta$Season, levels = c("Winter", "Spring", "Summer", "Autumn"))
+table(meta$Season, useNA = "ifany")
+
 ps <- readRDS("data/raw/phyloseq/complete/phyloseq.RDS")
 
 # Clean sample names

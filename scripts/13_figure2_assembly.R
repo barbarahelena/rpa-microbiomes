@@ -137,6 +137,7 @@ covariate_labels <- c(
     PM25_mean            = "PM2.5 (2013-2015 mean)",
     NO2_mean             = "NO2 (2014-2015 mean)",
     EC_mean              = "Soot/EC (2013-2015 mean)",
+    Season               = "Collection season",
     EthnicityTotal       = "Ethnicity"
 )
 
