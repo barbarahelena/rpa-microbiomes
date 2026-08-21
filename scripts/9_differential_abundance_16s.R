@@ -117,15 +117,19 @@ format_covariates <- function(covs, width = 70) {
 ## involve Dutch, which is exactly what "one consistent set per site"
 ## requires.
 ## DiscrMean_BA is excluded because it was only measured at baseline.
+## Season is included at both sites: results/beta_diversity/covariate_screen/
+## covariate_screen_*_16s_<site>.csv shows it significant (p=0.001) for both
+## Bray-Curtis and weighted UniFrac, at both throat and nose - the largest R2
+## of any covariate screened at nose, and second only to Smoking_FU at throat.
 covariates_list <- list(
     throat = c("Age_FU", "Sex", "BMI_FU", "Smoking_FU", "AlcoholYN_FU",
                "HTSelfBP_FU", "DMSelfGluc_FU", "MetSyn_FU", "Lipidlowering_FU",
                "Antidepressants_FU", "Psychotropics_FU",
                "ToothBrushing_FU", "TongueBrushing_FU", "Mouthwash_FU",
-               "OralHealth_FU",
+               "OralHealth_FU", "Season",
                "PM10_mean", "PM25_mean", "NO2_mean", "EC_mean"),
     nose = c("Age_FU", "Sex", "BMI_FU", "Smoking_FU", "AlcoholYN_FU",
-             "MetSyn_FU",
+             "MetSyn_FU", "Season",
              "ToothBrushing_FU", "TongueBrushing_FU", "Mouthwash_FU",
              "PM10_mean", "PM25_mean", "NO2_mean", "EC_mean")
 )

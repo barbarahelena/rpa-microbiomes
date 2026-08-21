@@ -269,7 +269,10 @@ covariates <- c(
     "OralHealth_FU", "Nasal_FU",
 
     # Air pollution exposure (RIVM ALO, 2013-2015 address-based mean)
-    "PM10_mean", "PM25_mean", "NO2_mean", "EC_mean"
+    "PM10_mean", "PM25_mean", "NO2_mean", "EC_mean",
+
+    # Sample collection
+    "Season"
 )
 
 ## ---- Compute loop over sites: throat and nose ----
