@@ -25,6 +25,8 @@ Scripts in `scripts/` are numbered in run order:
 | `6_alpha_diversity_16s_ethnicity.R` | Alpha diversity, 16S throat and nose, stratified by ethnicity | `alpha-16s` |
 | `7a_beta_diversity_16s_compute.R` | Beta diversity, 16S throat and nose: permutation-heavy PERMANOVA/betadisper computation, cached to `.rds` | `beta-16s-compute` |
 | `7b_beta_diversity_16s_report.R` | Beta diversity, 16S throat and nose: rebuild plots/tables from cached PERMANOVA/betadisper results (PCoA, betadisper, PERMANOVA, covariate screen, ethnicity attenuation) | `beta-16s-report` |
+| `7c_beta_diversity_16s_presence_compute.R` | Beta diversity, 16S throat and nose, presence/absence metrics (unweighted UniFrac, binary Jaccard): permutation-heavy computation, cached to `.rds` | `beta-16s-presence-compute` |
+| `7d_beta_diversity_16s_presence_report.R` | Beta diversity, 16S throat and nose: presence/absence plots/tables, plus the four-metric comparison locating ethnicity's effect in the abundant core or the rare tail (reads the `7a` and `7c` caches) | `beta-16s-presence-report` |
 | `8_beta_diversity_16s_migration.R` | Beta diversity, 16S, non-Dutch groups pooled by migration generation/acculturation | `beta-16s-migration` |
 | `9_differential_abundance_16s.R` | Differential abundance, 16S throat and nose, pairwise ethnicity comparisons (MaAsLin2) | `diffabund-16s` |
 | `10_upset_diffabund_16s.R` | Overlap of significant differentially abundant taxa across ethnicity pairs | `upset-diffabund-16s` |
