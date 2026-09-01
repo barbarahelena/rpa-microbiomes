@@ -27,6 +27,7 @@ Scripts in `scripts/` are numbered in run order:
 | `7b_beta_diversity_16s_report.R` | Beta diversity, 16S throat and nose: rebuild plots/tables from cached PERMANOVA/betadisper results (PCoA, betadisper, PERMANOVA, covariate screen, ethnicity attenuation) | `beta-16s-report` |
 | `8_beta_diversity_16s_migration.R` | Beta diversity, 16S, non-Dutch groups pooled by migration generation/acculturation | `beta-16s-migration` |
 | `9_differential_abundance_16s.R` | Differential abundance, 16S throat and nose, pairwise ethnicity comparisons (MaAsLin2) | `diffabund-16s` |
+| `9b_differential_abundance_genus_16s.R` | Differential abundance at genus level, 16S throat and nose, pairwise ethnicity comparisons (MaAsLin2) | `diffabund-16s-genus` |
 | `10_upset_diffabund_16s.R` | Overlap of significant differentially abundant taxa across ethnicity pairs | `upset-diffabund-16s` |
 | `11_alpha_diversity_shotgun.R` | Alpha diversity, shotgun tongue and throat, stratified by ethnicity | `alpha-shotgun` |
 
