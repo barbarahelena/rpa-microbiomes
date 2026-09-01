@@ -98,6 +98,14 @@ ps_throat <- readRDS("data/processed/ps_throat_rarefied.RDS")
 
 process_16s <- function(ps, site_label) {
   ps_rel <- transform_sample_counts(ps, function(x) x / sum(x))
+  ## psmelt() carries every sample_data column onto every sample x taxon row.
+  ## sample_data has 262 columns and the two objects melt to ~6.7M rows, so
+  ## melting them whole needs >13 GB and takes the session down. Nothing
+  ## downstream uses that metadata - prep_abundance() needs only sample_id,
+  ## Abundance, the tax rank and the `site` added below. Keep just `sample`
+  ## (the rename targets it) and drop the rest before melting: 274 columns
+  ## become 14, peak memory ~13.6 GB becomes ~2.8 GB, output unchanged.
+  sample_data(ps_rel) <- sample_data(ps_rel)[, "sample", drop = FALSE]
   df <- psmelt(ps_rel) |> rename(sample_id = sample)
   df$site <- site_label
   df
