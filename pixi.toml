@@ -21,12 +21,13 @@ beta-16s-report = { cmd = "Rscript scripts/7b_beta_diversity_16s_report.R", desc
 beta-16s = { cmd = "Rscript scripts/7b_beta_diversity_16s_report.R", depends-on = ["beta-16s-compute"], description = "Beta diversity, 16S throat/nose, stratified by ethnicity (PERMANOVA, betadisper) - full compute + report" }
 beta-16s-migration = { cmd = "Rscript scripts/8_beta_diversity_16s_migration.R", depends-on = ["clean-biome"], description = "Beta diversity, 16S, non-Dutch groups pooled by migration/acculturation" }
 diffabund-16s = { cmd = "Rscript scripts/9_differential_abundance_16s.R", depends-on = ["clean-biome"], description = "Differential abundance, 16S throat/nose, pairwise ethnicity comparisons (MaAsLin2)" }
+diffabund-16s-genus = { cmd = "Rscript scripts/9b_differential_abundance_genus_16s.R", depends-on = ["clean-biome"], description = "Differential abundance at genus level, 16S throat/nose, pairwise ethnicity comparisons (MaAsLin2)" }
 upset-diffabund-16s = { cmd = "Rscript scripts/10_upset_diffabund_16s.R", depends-on = ["diffabund-16s"], description = "Overlap of significant differentially abundant taxa across ethnicity pairs" }
 alpha-shotgun = { cmd = "Rscript scripts/11_alpha_diversity_shotgun.R", depends-on = ["clean-biome"], description = "Alpha diversity, shotgun tongue/throat, stratified by ethnicity" }
 figure1 = { cmd = "Rscript scripts/12_figure1_assembly.R", depends-on = ["clean-biome", "beta-16s-compute", "airpollution-amsterdam"], description = "Assemble Figure 1: Amsterdam air pollution map, sampling seasonality, Shannon diversity, and weighted UniFrac PCoA panels (16S throat/nose); betadisper moved to supplement" }
 figure2 = { cmd = "Rscript scripts/13_figure2_assembly.R", depends-on = ["beta-16s-compute"], description = "Assemble Figure 2: pairwise PERMANOVA (weighted UniFrac) and covariate effects on beta diversity (16S throat/nose)" }
 figure3 = { cmd = "Rscript scripts/14_figure3_assembly.R", depends-on = ["diffabund-16s"], description = "Assemble Figure 3: pairwise DA taxa counts and highlighted volcano plots (16S throat/nose), plus all-pairs volcano supplements" }
-pipeline = { depends-on = ["tableone", "airpollution-participants", "airpollution-amsterdam", "relabund-plots", "alpha-16s", "beta-16s", "beta-16s-migration", "upset-diffabund-16s", "alpha-shotgun", "figure1", "figure2", "figure3"], description = "Run the full analysis pipeline end to end" }
+pipeline = { depends-on = ["tableone", "airpollution-participants", "airpollution-amsterdam", "relabund-plots", "alpha-16s", "beta-16s", "beta-16s-migration", "upset-diffabund-16s", "diffabund-16s-genus", "alpha-shotgun", "figure1", "figure2", "figure3"], description = "Run the full analysis pipeline end to end" }
 
 [dependencies]
 bioconductor-phyloseq = { version = ">=1.50.0,<2", channel = "bioconda" }
