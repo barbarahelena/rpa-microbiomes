@@ -138,6 +138,7 @@ covariate_labels <- c(
     NO2_mean             = "NO2 (2014-2015 mean)",
     EC_mean              = "Soot/EC (2013-2015 mean)",
     Season               = "Collection season",
+    SeqBatch             = "Sequencing batch",
     EthnicityTotal       = "Ethnicity"
 )
 

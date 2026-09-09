@@ -107,6 +107,7 @@ covariate_labels <- c(
     NO2_mean             = "NO2 (2014-2015 mean)",
     EC_mean              = "Soot/EC (2013-2015 mean)",
     Season               = "Collection season",
+    SeqBatch             = "Sequencing batch",
     EthnicityTotal       = "Ethnicity"
 )
 
@@ -420,11 +421,19 @@ for (site_name in c("throat", "nose")) {
             } else {
                 ## Categorical covariate: validated palette, always a large
                 ## ellipse, plus centroids on top once there are 4+ levels -
-                ## same rule as the main ethnicity plot
-                p <- p +
-                    scale_colour_manual(values = cat_palette) +
-                    stat_ellipse(level = 0.95, linewidth = 0.8)
+                ## same rule as the main ethnicity plot. cat_palette has only
+                ## 8 validated hues (sized for ethnicity groups) - covariates
+                ## with more levels (e.g. DNAIsoBatch, SeqBatch) need the
+                ## palette interpolated up to the level count actually used.
                 n_cov_levels <- nlevels(droplevels(factor(plot_df[[cov]])))
+                cov_palette <- if (n_cov_levels <= length(cat_palette)) {
+                    cat_palette
+                } else {
+                    grDevices::colorRampPalette(cat_palette)(n_cov_levels)
+                }
+                p <- p +
+                    scale_colour_manual(values = cov_palette) +
+                    stat_ellipse(level = 0.95, linewidth = 0.8)
                 if (n_cov_levels > 3) {
                     cov_centroids <- plot_df |>
                         group_by(.data[[cov]]) |>
@@ -433,7 +442,7 @@ for (site_name in c("throat", "nose")) {
                         geom_point(data = cov_centroids,
                                    aes(x = PCo1, y = PCo2, fill = .data[[cov]]),
                                    shape = 21, colour = "black", size = 4, stroke = 0.8) +
-                        scale_fill_manual(values = cat_palette, guide = "none")
+                        scale_fill_manual(values = cov_palette, guide = "none")
                 }
             }
 

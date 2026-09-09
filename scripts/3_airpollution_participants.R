@@ -52,6 +52,7 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 ## Setup
 setwd(here::here())
 dir.create("results/airpollution", recursive = TRUE, showWarnings = FALSE)
+dir.create("results/sample_metadata", recursive = TRUE, showWarnings = FALSE)
 
 ## Ethnicity colours (same validated palette as scripts 4, 7 and 8)
 eth_colours <- c(
@@ -222,7 +223,7 @@ for (site_name in names(sites)) {
         count(EthnicityTotal, month, name = "n") |>
         complete(EthnicityTotal, month, fill = list(n = 0))
     write_csv(month_counts,
-              paste0("results/airpollution/season_by_ethnicity_16s_", site_name, "_counts.csv"))
+              paste0("results/sample_metadata/season_by_ethnicity_16s_", site_name, "_counts.csv"))
 
     ## Density plot: day-of-year sampling distribution by ethnicity
     p <- ggplot(date_df, aes(x = yday, colour = EthnicityTotal, fill = EthnicityTotal)) +
@@ -236,8 +237,70 @@ for (site_name in names(sites)) {
         theme_Publication() +
         theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-    ggsave(paste0("results/airpollution/season_by_ethnicity_16s_", site_name, ".pdf"),
+    ggsave(paste0("results/sample_metadata/season_by_ethnicity_16s_", site_name, ".pdf"),
            p, width = 8, height = 5)
-    ggsave(paste0("results/airpollution/season_by_ethnicity_16s_", site_name, ".png"),
+    ggsave(paste0("results/sample_metadata/season_by_ethnicity_16s_", site_name, ".png"),
            p, width = 8, height = 5, dpi = 300)
+}
+
+## ---- Batch composition by ethnicity ----
+## Distribution of ethnicity groups across sequencing runs (SeqBatch) -
+## context for the batch covariate used in the alpha/beta diversity and
+## differential abundance scripts (6, 7a/7b, 9). DNAIsoBatch (DNA isolation
+## date) was also tested as a candidate batch covariate but explains largely
+## overlapping beta-diversity variance and isn't used (see
+## scripts/7a_beta_diversity_16s_compute.R), so it has no distribution plot here.
+batch_vars <- c(
+    SeqBatch = "Sequencing batch"
+)
+
+for (site_name in names(sites)) {
+    ps <- sites[[site_name]]
+
+    ## Filter to ethnicity groups with N > 50 in this site (matches above)
+    keep <- table(sample_data(ps)$EthnicityTotal)
+    ps <- subset_samples(ps, EthnicityTotal %in% names(keep)[keep > 50])
+    site_meta <- sample_data(ps) |>
+        as("data.frame") |>
+        mutate(EthnicityTotal = droplevels(factor(EthnicityTotal)))
+
+    for (batch_var in names(batch_vars)) {
+        batch_df <- site_meta |>
+            filter(!is.na(.data[[batch_var]])) |>
+            rename(Batch = all_of(batch_var))
+
+        n_missing <- nrow(site_meta) - nrow(batch_df)
+        cat(site_name, "-", batch_var, ": dropped", n_missing,
+            "sample(s) with missing batch\n")
+
+        ## Batch labels (isolation dates / sequential run IDs) sort
+        ## chronologically as plain strings
+        batch_df$Batch <- factor(batch_df$Batch, levels = sort(unique(batch_df$Batch)))
+
+        ## Ethnicity counts per batch (reference table)
+        batch_counts <- batch_df |>
+            count(Batch, EthnicityTotal, name = "n") |>
+            complete(Batch, EthnicityTotal, fill = list(n = 0))
+        write_csv(batch_counts,
+                  paste0("results/sample_metadata/", tolower(batch_var), "_by_ethnicity_16s_",
+                         site_name, "_counts.csv"))
+
+        ## Stacked proportional bar: ethnicity composition per batch
+        p <- ggplot(batch_df, aes(x = Batch, fill = EthnicityTotal)) +
+            geom_bar(position = "fill") +
+            scale_fill_manual(values = eth_colours, name = "Ethnicity") +
+            scale_y_continuous(labels = scales::percent_format(), expand = c(0, 0)) +
+            labs(title = paste0(batch_vars[[batch_var]], " composition by ethnicity - 16S ",
+                                 site_name),
+                 x = batch_vars[[batch_var]], y = "Proportion of samples") +
+            theme_Publication() +
+            theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+
+        ggsave(paste0("results/sample_metadata/", tolower(batch_var), "_by_ethnicity_16s_",
+                      site_name, ".pdf"),
+               p, width = 10, height = 5)
+        ggsave(paste0("results/sample_metadata/", tolower(batch_var), "_by_ethnicity_16s_",
+                      site_name, ".png"),
+               p, width = 10, height = 5, dpi = 300)
+    }
 }
