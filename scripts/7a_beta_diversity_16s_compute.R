@@ -55,29 +55,12 @@ keep_groups <- function(ps, min_n = 50) { # this means categories such as Javane
     names(counts)[counts > min_n]
 }
 
-## mclapply() has been observed, on some platforms, to silently drop the
-## result for a task with no error or warning - just missing from the
-## output - when that task's computation is heavy enough (e.g. a PERMANOVA
-## model on a covariate with many factor levels, such as DNAIsoBatch or
-## SeqBatch). Retries any missing task serially (no forking), which
-## reliably succeeds where the forked worker silently didn't.
-mclapply_safe <- function(X, FUN, mc.cores) {
-    result <- mclapply(X, FUN, mc.cores = mc.cores)
-    missing <- vapply(result, is.null, logical(1))
-    if (any(missing)) {
-        message("mclapply_safe: retrying ", sum(missing),
-                " task(s) serially after a dropped fork result")
-        result[missing] <- lapply(X[missing], FUN)
-    }
-    result
-}
-
 ## Pairwise PERMANOVA between every pair of groups (BH-adjusted).
 ## Pairs are independent, so run them across cores.
 pairwise_permanova <- function(dist_mat, meta, group_var = "EthnicityTotal", n_cores = 1) {
     groups <- levels(droplevels(meta[[group_var]]))
     pairs <- combn(groups, 2, simplify = FALSE)
-    mclapply_safe(pairs, function(pair) {
+    mclapply(pairs, function(pair) {
         idx <- meta[[group_var]] %in% pair
         d_sub <- as.dist(as.matrix(dist_mat)[idx, idx])
         m_sub <- meta[idx, ] |> mutate(across(where(is.factor), droplevels))
@@ -103,7 +86,7 @@ pairwise_permanova_adjusted <- function(dist_mat, meta, covariates, unadjusted,
 
     groups <- levels(droplevels(meta[[group_var]]))
     pairs <- combn(groups, 2, simplify = FALSE)
-    mclapply_safe(pairs, function(pair) {
+    mclapply(pairs, function(pair) {
         idx <- meta[[group_var]] %in% pair & complete.cases(meta[, covariates, drop = FALSE])
         m_sub <- meta[idx, ] |> mutate(across(where(is.factor), droplevels))
 
@@ -150,7 +133,7 @@ compute_permanova_block <- function(dist_mat, meta, covariates, n_cores) {
     permanova_pairwise <- pairwise_permanova(dist_mat, meta, n_cores = n_cores)
 
     ## ---- Covariate screening (individual PERMANOVA per covariate) ----
-    covariate_screen <- mclapply_safe(covariates, function(cov) {
+    covariate_screen <- mclapply(covariates, function(cov) {
         ## Use complete cases for this covariate
         cc_idx <- !is.na(meta[[cov]])
         if (sum(cc_idx) < 10) return(NULL)
@@ -187,7 +170,7 @@ compute_permanova_block <- function(dist_mat, meta, covariates, n_cores) {
     ## that same covariate's complete-case subset (so the comparison isn't
     ## confounded by sample-size differences between covariates). A covariate
     ## that's a strong confounder of the ethnicity effect shows a large drop.
-    ethnicity_attenuation <- mclapply_safe(covariates, function(cov) {
+    ethnicity_attenuation <- mclapply(covariates, function(cov) {
         cc_idx <- !is.na(meta[[cov]])
         if (sum(cc_idx) < 10) return(NULL)
 
