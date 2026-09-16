@@ -52,7 +52,7 @@ test_n <- suppressWarnings(as.integer(Sys.getenv("BETA_DIV_TEST_N", "")))
 outdir <- if (!is.na(test_n)) "results/beta_diversity_test" else "results/beta_diversity"
 if (!is.na(test_n)) cat("TEST MODE: reading/writing", outdir, "\n")
 
-for (sub in c("pcoa", "permanova", "covariate_screen", "betadisper")) {
+for (sub in c("pcoa", "permanova", "covariate_screen", "betadisper", "batch_effect")) {
     dir.create(file.path(outdir, sub), recursive = TRUE, showWarnings = FALSE)
 }
 
@@ -171,6 +171,63 @@ pairwise_permanova_heatmap <- function(pairwise_df, groups_order, title, subtitl
     p
 }
 
+## Builds one PCoA plot coloured by a single covariate (continuous: viridis;
+## categorical: validated palette, interpolated up for >8 levels, with a
+## large ellipse and, for 4+ levels, filled centroids on top - same rule as
+## the main ethnicity plot). Used both for the supplementary per-covariate
+## PCoA panels (covariates significantly associated with beta diversity) and
+## for the standalone batch-effect illustration PCoA below.
+plot_pcoa_by_covariate <- function(plot_df, cov, cov_label, stat_label,
+                                    var_explained, dist_name, site_name,
+                                    cat_palette) {
+    p <- ggplot(plot_df, aes(x = PCo1, y = PCo2, colour = .data[[cov]])) +
+        geom_point(alpha = 0.5, size = 1) +
+        annotate("text", x = Inf, y = Inf, label = stat_label,
+                 hjust = 1.05, vjust = 1.5, size = 3.2) +
+        labs(x = paste0("PCo1 (", var_explained[1], "%)"),
+             y = paste0("PCo2 (", var_explained[2], "%)"),
+             colour = cov_label,
+             title = paste0("PCoA - ", dist_name, " - 16S ", site_name)) +
+        theme_Publication() +
+        theme(legend.position = "right")
+
+    if (is.numeric(plot_df[[cov]])) {
+        ## Continuous covariate: viridis, no ellipse/centroid.
+        ## theme_Publication()'s legend.key.size is tiny (sized for discrete
+        ## dot legends), so give the colourbar its own height.
+        p <- p + scale_colour_viridis_c(
+            option = "plasma",
+            guide = guide_colourbar(barheight = unit(4, "cm"))
+        )
+    } else {
+        ## Categorical covariate: validated palette, always a large ellipse,
+        ## plus centroids on top once there are 4+ levels. cat_palette has
+        ## only 8 validated hues (sized for ethnicity groups) - covariates
+        ## with more levels (e.g. SeqBatch) need the palette interpolated up
+        ## to the level count actually used.
+        n_cov_levels <- nlevels(droplevels(factor(plot_df[[cov]])))
+        cov_palette <- if (n_cov_levels <= length(cat_palette)) {
+            cat_palette
+        } else {
+            grDevices::colorRampPalette(cat_palette)(n_cov_levels)
+        }
+        p <- p +
+            scale_colour_manual(values = cov_palette) +
+            stat_ellipse(level = 0.95, linewidth = 0.8)
+        if (n_cov_levels > 3) {
+            cov_centroids <- plot_df |>
+                group_by(.data[[cov]]) |>
+                summarise(PCo1 = mean(PCo1), PCo2 = mean(PCo2), .groups = "drop")
+            p <- p +
+                geom_point(data = cov_centroids,
+                           aes(x = PCo1, y = PCo2, fill = .data[[cov]]),
+                           shape = 21, colour = "black", size = 4, stroke = 0.8) +
+                scale_fill_manual(values = cov_palette, guide = "none")
+        }
+    }
+    p
+}
+
 ## ---- Report loop over sites: throat and nose ----
 for (site_name in c("throat", "nose")) {
     cache_path <- file.path(outdir, "cache", paste0("beta_diversity_16s_", site_name, ".rds"))
@@ -207,6 +264,7 @@ for (site_name in c("throat", "nose")) {
         permanova_pairwise_adjusted <- block$permanova_pairwise_adjusted
         covariate_screen            <- block$covariate_screen
         sig_covariates              <- block$sig_covariates
+        batch_screen                <- block$batch_screen
         ethnicity_attenuation       <- block$ethnicity_attenuation
         permanova_full              <- block$permanova_full
         betadisp                    <- block$betadisp
@@ -394,59 +452,45 @@ for (site_name in c("throat", "nose")) {
             plot_df <- ord_df[!is.na(ord_df[[cov]]), ]
 
             cov_stats <- covariate_screen |> filter(covariate == cov)
-            cov_label <- paste0(
+            stat_label <- paste0(
                 "PERMANOVA: R² = ", round(cov_stats$R2[1], 3),
                 ", p = ", format.pval(cov_stats$p.value[1], digits = 2, eps = 0.001)
             )
 
-            p <- ggplot(plot_df, aes(x = PCo1, y = PCo2, colour = .data[[cov]])) +
-                geom_point(alpha = 0.5, size = 1) +
-                annotate("text", x = Inf, y = Inf, label = cov_label,
-                         hjust = 1.05, vjust = 1.5, size = 3.2) +
-                labs(x = paste0("PCo1 (", var_explained[1], "%)"),
-                     y = paste0("PCo2 (", var_explained[2], "%)"),
-                     colour = covariate_labels[[cov]],
-                     title = paste0("PCoA - ", dist_name, " - 16S ", site_name)) +
-                theme_Publication() +
-                theme(legend.position = "right")
-
-            if (is.numeric(plot_df[[cov]])) {
-                ## Continuous covariate: viridis, no ellipse/centroid.
-                ## theme_Publication()'s legend.key.size is tiny (sized for
-                ## discrete dot legends), so give the colourbar its own height.
-                p <- p + scale_colour_viridis_c(
-                    option = "plasma",
-                    guide = guide_colourbar(barheight = unit(4, "cm"))
-                )
-            } else {
-                ## Categorical covariate: validated palette, always a large
-                ## ellipse, plus centroids on top once there are 4+ levels -
-                ## same rule as the main ethnicity plot. cat_palette has only
-                ## 8 validated hues (sized for ethnicity groups) - covariates
-                ## with more levels (e.g. DNAIsoBatch, SeqBatch) need the
-                ## palette interpolated up to the level count actually used.
-                n_cov_levels <- nlevels(droplevels(factor(plot_df[[cov]])))
-                cov_palette <- if (n_cov_levels <= length(cat_palette)) {
-                    cat_palette
-                } else {
-                    grDevices::colorRampPalette(cat_palette)(n_cov_levels)
-                }
-                p <- p +
-                    scale_colour_manual(values = cov_palette) +
-                    stat_ellipse(level = 0.95, linewidth = 0.8)
-                if (n_cov_levels > 3) {
-                    cov_centroids <- plot_df |>
-                        group_by(.data[[cov]]) |>
-                        summarise(PCo1 = mean(PCo1), PCo2 = mean(PCo2), .groups = "drop")
-                    p <- p +
-                        geom_point(data = cov_centroids,
-                                   aes(x = PCo1, y = PCo2, fill = .data[[cov]]),
-                                   shape = 21, colour = "black", size = 4, stroke = 0.8) +
-                        scale_fill_manual(values = cov_palette, guide = "none")
-                }
-            }
+            p <- plot_pcoa_by_covariate(plot_df, cov, covariate_labels[[cov]],
+                                         stat_label, var_explained, dist_name,
+                                         site_name, cat_palette)
 
             ggsave(paste0(outdir, "/pcoa/pcoa_", dist_label, "_16s_",
+                          site_name, "_", cov, ".pdf"),
+                   plot = p, width = 7, height = 6)
+        }
+
+        ## ---- Batch effect illustration: standalone PCoA + effect size,
+        ## kept separate from the covariate screen/PCoA panels above so
+        ## sequencing batch (always adjusted for, never screened - see
+        ## always_covariates in 7a_beta_diversity_16s_compute.R) doesn't show
+        ## up as one of the ethnicity-model covariates, while its own
+        ## (unadjusted) effect size on beta diversity is still visible ----
+        write_csv(batch_screen,
+                  paste0(outdir, "/batch_effect/batch_effect_", dist_label,
+                         "_16s_", site_name, ".csv"))
+
+        for (cov in batch_screen$covariate) {
+            ord_df[[cov]] <- meta[[cov]]
+            plot_df <- ord_df[!is.na(ord_df[[cov]]), ]
+
+            cov_stats <- batch_screen |> filter(covariate == cov)
+            stat_label <- paste0(
+                "PERMANOVA: R² = ", round(cov_stats$R2[1], 3),
+                ", p = ", format.pval(cov_stats$p.value[1], digits = 2, eps = 0.001)
+            )
+
+            p <- plot_pcoa_by_covariate(plot_df, cov, covariate_labels[[cov]],
+                                         stat_label, var_explained, dist_name,
+                                         site_name, cat_palette)
+
+            ggsave(paste0(outdir, "/batch_effect/pcoa_", dist_label, "_16s_",
                           site_name, "_", cov, ".pdf"),
                    plot = p, width = 7, height = 6)
         }

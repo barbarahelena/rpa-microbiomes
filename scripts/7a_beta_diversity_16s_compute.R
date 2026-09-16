@@ -118,8 +118,14 @@ pairwise_permanova_adjusted <- function(dist_mat, meta, covariates, unadjusted,
 }
 
 ## Bundles every permutation-heavy PERMANOVA/betadisper call for one site x
-## distance-metric combination into a single object.
-compute_permanova_block <- function(dist_mat, meta, covariates, n_cores) {
+## distance-metric combination into a single object. `covariates` are
+## screened for significance and only added to the adjusted models when
+## significant; `always_covariates` (technical batch) are always added to
+## the adjusted models regardless of significance, and never screened
+## individually - batch_screen below reports its own effect size purely as
+## an illustration, separate from the covariate screen/attenuation used to
+## build the adjusted models.
+compute_permanova_block <- function(dist_mat, meta, covariates, always_covariates, n_cores) {
     ## ---- PERMANOVA: ethnicity only (omnibus across all groups) ----
     permanova_eth <- adonis2(
         dist_mat ~ EthnicityTotal,
@@ -163,6 +169,33 @@ compute_permanova_block <- function(dist_mat, meta, covariates, n_cores) {
         filter(p.value < 0.05) |>
         pull(covariate)
 
+    ## ---- Batch effect screening (illustration only - unlike covariate_screen,
+    ## this never feeds sig_covariates; always_covariates go into the adjusted
+    ## models unconditionally, see below) ----
+    batch_screen <- mclapply(always_covariates, function(cov) {
+        cc_idx <- !is.na(meta[[cov]])
+        if (sum(cc_idx) < 10) return(NULL)
+
+        meta_cc <- meta[cc_idx, ] |>
+            mutate(across(where(is.factor), droplevels))
+
+        vals <- meta_cc[[cov]]
+        if (is.factor(vals) && nlevels(vals) < 2) return(NULL)
+        if (!is.factor(vals) && length(unique(vals)) < 2) return(NULL)
+
+        dist_cc <- as.dist(as.matrix(dist_mat)[cc_idx, cc_idx])
+
+        formula <- as.formula(paste("dist_cc ~", cov))
+        res <- adonis2(formula, data = meta_cc, permutations = 999)
+        tibble(
+            covariate = cov,
+            Df        = res$Df[1],
+            R2        = res$R2[1],
+            F_stat    = res$F[1],
+            p.value   = res[["Pr(>F)"]][1]
+        )
+    }, mc.cores = n_cores) |> bind_rows()
+
     ## ---- Ethnicity attenuation: how much does each covariate individually
     ## explain of ethnicity's effect on beta diversity? Fits
     ## dist ~ covariate + EthnicityTotal (covariate first, so ethnicity's R2
@@ -203,9 +236,11 @@ compute_permanova_block <- function(dist_mat, meta, covariates, n_cores) {
         )
     }, mc.cores = n_cores) |> bind_rows() |> arrange(desc(abs_reduction))
 
-    ## ---- Full PERMANOVA: ethnicity + significant covariates ----
-    if (length(sig_covariates) > 0) {
-        model_vars <- c("EthnicityTotal", sig_covariates)
+    ## ---- Full PERMANOVA: ethnicity + significant covariates + always_covariates
+    ## (technical batch, adjusted for unconditionally) ----
+    adjust_covariates <- c(sig_covariates, always_covariates)
+    if (length(adjust_covariates) > 0) {
+        model_vars <- c("EthnicityTotal", adjust_covariates)
         cc_idx <- complete.cases(meta[, model_vars])
         meta_cc <- meta[cc_idx, ] |>
             mutate(across(where(is.factor), droplevels))
@@ -213,7 +248,7 @@ compute_permanova_block <- function(dist_mat, meta, covariates, n_cores) {
 
         permanova_full <- adonis2(
             as.formula(paste("dist_cc ~ EthnicityTotal +",
-                             paste(sig_covariates, collapse = " + "))),
+                             paste(adjust_covariates, collapse = " + "))),
             data = meta_cc,
             permutations = 999,
             parallel = n_cores,
@@ -223,9 +258,10 @@ compute_permanova_block <- function(dist_mat, meta, covariates, n_cores) {
         permanova_full <- permanova_eth
     }
 
-    ## ---- PERMANOVA pairwise post-hoc, adjusted for significant covariates ----
+    ## ---- PERMANOVA pairwise post-hoc, adjusted for significant covariates +
+    ## always_covariates ----
     permanova_pairwise_adjusted <- pairwise_permanova_adjusted(
-        dist_mat, meta, sig_covariates, unadjusted = permanova_pairwise,
+        dist_mat, meta, adjust_covariates, unadjusted = permanova_pairwise,
         n_cores = n_cores
     )
 
@@ -241,6 +277,7 @@ compute_permanova_block <- function(dist_mat, meta, covariates, n_cores) {
         permanova_pairwise_adjusted = permanova_pairwise_adjusted,
         covariate_screen            = covariate_screen,
         sig_covariates              = sig_covariates,
+        batch_screen                = batch_screen,
         ethnicity_attenuation       = ethnicity_attenuation,
         permanova_full              = permanova_full,
         betadisp                    = betadisp,
@@ -272,15 +309,21 @@ covariates <- c(
     "PM10_mean", "PM25_mean", "NO2_mean", "EC_mean",
 
     # Sample collection
-    "Season",
-
-    # Technical batch. DNAIsoBatch (DNA isolation date) was also screened as a
-    # candidate but explains largely overlapping variance: its effect drops to
-    # non-significant in 3 of 4 site x distance combinations once SeqBatch is
-    # already in the model, while SeqBatch stays significant after DNAIsoBatch
-    # in all four - so only SeqBatch (sequencing run) is retained here.
-    "SeqBatch"
+    "Season"
 )
+
+## Technical batch covariate(s), adjusted for in every model below
+## regardless of significance (a technical artefact, not a biological
+## exposure to screen in/out) - so it's kept out of `covariates` and never
+## appears in the per-covariate screen/attenuation/PCoA outputs built from
+## that list. DNAIsoBatch (DNA isolation date) was also tested as a candidate
+## but explains largely overlapping variance: its effect drops to
+## non-significant in 3 of 4 site x distance combinations once SeqBatch is
+## already in the model, while SeqBatch stays significant after DNAIsoBatch
+## in all four - so only SeqBatch (sequencing run) is retained here.
+## batch_screen (see compute_permanova_block) still reports its own
+## unadjusted effect size, as a standalone illustration of the batch effect.
+always_covariates <- c("SeqBatch")
 
 ## ---- Compute loop over sites: throat and nose ----
 sites <- list(
@@ -336,7 +379,8 @@ for (site_name in names(sites)) {
         ## Every 999-permutation call for this site x distance combination is
         ## bundled into one object - the single most expensive step in this
         ## script.
-        blocks[[dist_name]] <- compute_permanova_block(dist_mat, meta, covariates, n_cores)
+        blocks[[dist_name]] <- compute_permanova_block(dist_mat, meta, covariates,
+                                                        always_covariates, n_cores)
 
         ## PCoA ordination - not permutation-based, but wunifrac requires the
         ## phylogenetic tree (ps), so it's cheapest to compute once here
