@@ -288,16 +288,27 @@ for (site_name in c("throat", "nose")) {
         ethnicity_attenuation_all[[dist_name]] <- block$ethnicity_attenuation |>
             mutate(distance = dist_name)
 
-        ## Omnibus ethnicity R2/p, unadjusted and adjusted, for the markdown
-        ## summary. permanova_full falls back to permanova_eth when a metric
-        ## had no significant covariates, in which case the two agree.
+        ## Omnibus ethnicity R2/p for the markdown summary.
+        ##
+        ## Note what permanova_full is and is not. It fits
+        ## `dist ~ EthnicityTotal + <sig covariates>` with by = "terms", so
+        ## ethnicity is entered FIRST and its sequential R2 there is its
+        ## *marginal* effect, not its effect net of the covariates - it is
+        ## bit-identical to the ethnicity-only R2 whenever complete-case
+        ## filtering on the covariates drops no samples, and differs only by
+        ## that subsetting otherwise. (Contrast pairwise_permanova_adjusted()
+        ## in 7c, which deliberately puts the covariates before the group term
+        ## precisely to get a net-of-covariates estimate.) So this column is
+        ## labelled as a complete-case refit below, not as an adjusted effect.
+        ## The cache carries no covariate-adjusted *omnibus* estimate; the
+        ## adjusted pairwise tables are where that question is answered.
         omnibus_all[[paste(site_name, dist_name)]] <- tibble(
             site            = site_name,
             distance        = dist_name,
-            R2_unadjusted   = block$permanova_eth$R2[1],
-            p_unadjusted    = block$permanova_eth[["Pr(>F)"]][1],
-            R2_adjusted     = block$permanova_full["EthnicityTotal", "R2"],
-            p_adjusted      = block$permanova_full["EthnicityTotal", "Pr(>F)"],
+            R2_marginal     = block$permanova_eth$R2[1],
+            p_marginal      = block$permanova_eth[["Pr(>F)"]][1],
+            R2_fullmodel_cc = block$permanova_full["EthnicityTotal", "R2"],
+            p_fullmodel_cc  = block$permanova_full["EthnicityTotal", "Pr(>F)"],
             n_sig_covariates = length(block$sig_covariates),
             betadisper_p    = block$betadisp_test$tab[["Pr(>F)"]][1]
         )
@@ -661,15 +672,15 @@ comparison <- omnibus |>
         weighted_metric = unname(metric_counterpart[as.character(distance)])
     ) |>
     left_join(omnibus |> transmute(site, presence_metric = as.character(distance),
-                                   R2_pa = R2_unadjusted, p_pa = p_unadjusted,
-                                   R2_pa_adj = R2_adjusted, disp_p_pa = betadisper_p),
+                                   R2_pa = R2_marginal, p_pa = p_marginal,
+                                   R2_pa_cc = R2_fullmodel_cc, disp_p_pa = betadisper_p),
               by = c("site", "presence_metric")) |>
     left_join(omnibus |> transmute(site, weighted_metric = as.character(distance),
-                                   R2_w = R2_unadjusted, p_w = p_unadjusted,
-                                   R2_w_adj = R2_adjusted, disp_p_w = betadisper_p),
+                                   R2_w = R2_marginal, p_w = p_marginal,
+                                   R2_w_cc = R2_fullmodel_cc, disp_p_w = betadisper_p),
               by = c("site", "weighted_metric")) |>
     mutate(ratio = R2_pa / R2_w,
-           ratio_adj = R2_pa_adj / R2_w_adj)
+           ratio_cc = R2_pa_cc / R2_w_cc)
 
 write_csv(comparison,
           file.path(outdir, "comparison", "weighted_vs_unweighted_ethnicity_R2.csv"))
@@ -699,11 +710,11 @@ interpret <- function(row) {
     }
     paste0("- **", row$site, ", ", tolower(row$family), " (",
            row$presence_metric, " vs ", row$weighted_metric, ")**: ethnicity R² is ",
-           verdict, ". Unadjusted R² ", fmt_pct(row$R2_pa), " (p = ", fmt_p(row$p_pa),
+           verdict, ". R² ", fmt_pct(row$R2_pa), " (p = ", fmt_p(row$p_pa),
            ") vs ", fmt_pct(row$R2_w), " (p = ", fmt_p(row$p_w),
-           "); adjusted for that metric's significant covariates, ",
-           fmt_pct(row$R2_pa_adj), " vs ", fmt_pct(row$R2_w_adj),
-           " (", sprintf("%.2fx", row$ratio_adj), ").")
+           "); on the full model's complete-case subset, ",
+           fmt_pct(row$R2_pa_cc), " vs ", fmt_pct(row$R2_w_cc),
+           " (", sprintf("%.2fx", row$ratio_cc), ").")
 }
 
 ## Betadisper matters here on its own: dispersion that differs between groups
@@ -758,20 +769,26 @@ md <- c(
     "",
     "## Omnibus ethnicity effect (PERMANOVA, 999 permutations)",
     "",
-    "| Site | Metric | Weighting | Unadjusted R² | p | Adjusted R² | p | Sig. covariates |",
+    "| Site | Metric | Weighting | R² | p | R² (full model, complete cases) | p | Sig. covariates |",
     "|---|---|---|---|---|---|---|---|",
     omnibus |>
         mutate(weighting = if_else(as.character(distance) %in% presence_metrics,
                                    "presence/absence", "abundance"),
                line = paste0("| ", site, " | ", distance, " | ", weighting, " | ",
-                             fmt_pct(R2_unadjusted), " | ", fmt_p(p_unadjusted), " | ",
-                             fmt_pct(R2_adjusted), " | ", fmt_p(p_adjusted), " | ",
+                             fmt_pct(R2_marginal), " | ", fmt_p(p_marginal), " | ",
+                             fmt_pct(R2_fullmodel_cc), " | ", fmt_p(p_fullmodel_cc), " | ",
                              n_sig_covariates, " |")) |>
         pull(line),
     "",
-    "Adjusted R² is ethnicity net of that metric's own significant covariates, so the",
-    "adjustment set differs between metrics and the adjusted columns are not a like-for-like",
-    "comparison the way the unadjusted ones are.",
+    "**The last two columns are not a covariate-adjusted effect.** The full model fits",
+    "`dist ~ EthnicityTotal + <significant covariates>` with sequential sums of squares and",
+    "ethnicity entered *first*, so ethnicity's R² there is still its marginal effect - it is",
+    "identical to the first R² column whenever complete-case filtering on the covariates drops",
+    "no samples, and differs only by that subsetting otherwise. Read those columns as a refit",
+    "on the complete-case subset, nothing more. For ethnicity net of covariates, see the",
+    "adjusted pairwise tables (`permanova_pairwise_adjusted_*.csv`), which enter the covariates",
+    "before the group term, and the attenuation outputs, which report ethnicity's R² net of one",
+    "covariate at a time.",
     "",
     "## Where does the effect sit?",
     "",
