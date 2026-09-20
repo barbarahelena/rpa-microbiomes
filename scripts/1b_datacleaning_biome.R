@@ -64,6 +64,13 @@ meta$Season <- case_when(
 meta$Season <- factor(meta$Season, levels = c("Winter", "Spring", "Summer", "Autumn"))
 table(meta$Season, useNA = "ifany")
 
+# Derive technical batch covariate: sequencing batch (Illumina run ID). DNA
+# isolation date was also tested as a candidate batch covariate but explains
+# largely overlapping beta-diversity variance (see scripts/7a_beta_diversity_16s_compute.R);
+# only sequencing batch is retained.
+meta$SeqBatch <- factor(na_if(meta$Seq_ID, ""))
+table(meta$SeqBatch, useNA = "ifany")
+
 ps <- readRDS("data/raw/phyloseq/complete/phyloseq.RDS")
 
 # Clean sample names

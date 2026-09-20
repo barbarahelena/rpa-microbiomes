@@ -134,6 +134,14 @@ covariates_list <- list(
              "PM10_mean", "PM25_mean", "NO2_mean", "EC_mean")
 )
 
+## Technical batch covariate, adjusted for in every MaAsLin2 model below
+## regardless of significance (a technical artefact, not a candidate
+## confounder to screen in/out) - so it's kept out of covariates_list/
+## assess_confounders() and out of the "Adjusted for:" plot subtitles built
+## from sig_confounders, same convention as always_covariates in
+## 7a_beta_diversity_16s_compute.R.
+always_covariates <- c("SeqBatch")
+
 ## ---- Confounder assessment: omnibus across all qualifying groups ----
 ## Tests association between each covariate and ethnicity using every
 ## qualifying group at a site at once (not per pair), so a single set of
@@ -188,8 +196,12 @@ assess_confounders <- function(meta, covariates) {
 ## ps_site is already restricted to qualifying groups and antibiotic-free.
 ## sig_confounders was assessed once for the whole site (see
 ## assess_confounders() above) and is shared across every pair at this site.
+## always_covariates (technical batch) is added to every model unconditionally
+## and is never part of sig_confounders, so it never appears in the "Adjusted
+## for:" plot subtitles below (which are built from sig_confounders only).
 ## Returns a one-row summary tibble for the site-level pair summary.
-run_da_pair <- function(ps_site, site_name, group1, group2, sig_confounders, outdir) {
+run_da_pair <- function(ps_site, site_name, group1, group2, sig_confounders,
+                         always_covariates, outdir) {
     pair_tag <- pair_name(group1, group2)
     ## Short forms for plot titles only (axis/legend labels keep full names)
     g1_abbr <- eth_abbrev[[group1]]
@@ -226,10 +238,11 @@ run_da_pair <- function(ps_site, site_name, group1, group2, sig_confounders, out
 
     ## Prepare metadata for MaAsLin2
     meta_maaslin <- meta |>
-        select(EthnicityTotal, all_of(sig_confounders))
+        select(EthnicityTotal, all_of(sig_confounders), all_of(always_covariates))
 
-    ## Fixed effects: ethnicity + significant confounders
-    fixed_effects <- c("EthnicityTotal", sig_confounders)
+    ## Fixed effects: ethnicity + significant confounders + always_covariates
+    ## (technical batch, adjusted for unconditionally - see always_covariates above)
+    fixed_effects <- c("EthnicityTotal", sig_confounders, always_covariates)
 
     ## Output directory
     maaslin_outdir <- file.path(outdir, "maaslin2",
@@ -652,7 +665,8 @@ for (site_name in names(sites)) {
 
     for (pair in pairs) {
         summary_rows[[length(summary_rows) + 1]] <-
-            run_da_pair(ps, site_name, pair[1], pair[2], sig_confounders, outdir)
+            run_da_pair(ps, site_name, pair[1], pair[2], sig_confounders,
+                        always_covariates, outdir)
     }
 
     cat("Completed:", site_name, "(", length(pairs), "pairs )\n\n")
