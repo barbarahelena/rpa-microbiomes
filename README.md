@@ -55,22 +55,15 @@ Each task declares its own `inputs` and `outputs` in `pixi.toml`:
   patterns are scoped to the producer, even when several tasks share a
   results directory. For example, writing beta-diversity reports does not
   invalidate the separate distance/model cache.
-- The always-run `_cache-context` task executes `scripts/cache_context.R`
-  before cache lookup. It records R/platform/library versions and the
-  installed R package inventory, including packages installed through
-  BiocManager outside `pixi.lock`. It writes small files in the ignored
-  `cache/analysis/` directory; unchanged settings produce unchanged bytes.
-- `BETA_DIV_TEST_N` and `BETA_DIV_N_CORES` invalidate beta-diversity tasks
-  and their figures; `DIFF_AB_TEST_N` invalidates differential-abundance
-  tasks and their reports. Switching between test and full runs, or between
-  test sample sizes, causes a rebuild. Existing test/production output
-  locations are preserved; both are tracked conservatively, so a change
-  to either location can cause an extra rebuild.
+- R and the analysis packages are resolved to exact builds in `pixi.lock`, so
+  a lockfile change invalidates the analysis tasks. `Maaslin2` is the sole
+  exception: Bioconda has no R 4.4 build, so the setup script installs it with
+  BiocManager.
 
 For example, changing only `13_figure2_assembly.R` rebuilds Figure 2 while
 reusing valid cleaned data and beta-diversity models. Changing raw metadata
 reruns cleaning; downstream tasks rerun when their input contents change.
-Changing the software environment conservatively invalidates all analyses.
+Changing the locked software environment invalidates all analyses.
 
 `beta-16s-report` now validates its compute dependency too. If that cache is
 stale, the compute task runs before reporting; `beta-16s` is an alias for
@@ -83,26 +76,27 @@ settings in the shell instead.
 
 The first run after enabling caching recomputes the requested tasks and
 their prerequisites: old result files have no trusted cache record. A
-failed task does not establish a successful cache record. To deliberately
-refresh a task and its prerequisite chain, use:
+failed task does not establish a successful cache record. Pixi 0.66 has no
+`--force` option for cached tasks. To rerun one analysis deliberately, run
+its command directly in the Pixi environment, for example:
 
 ```bash
-PIPELINE_FORCE=1 pixi run figure2
-# Or refresh the complete pipeline:
-PIPELINE_FORCE=1 pixi run pipeline
+pixi run Rscript --vanilla scripts/13_figure2_assembly.R
 ```
 
-The refresh token persists, so removing `PIPELINE_FORCE` afterward does not
-cause a second rebuild. To inspect the exact files Pixi hashes, use
-`pixi run -vvv figure2` (this executes stale tasks, not just a status check).
+This bypasses task dependencies and does not refresh the task's cache record;
+use it only when those dependencies are already current. Alternatively,
+removing or changing a declared output makes the normal task run stale. To
+inspect the exact files Pixi hashes, use `pixi run -vvv figure2` (this executes
+stale tasks, not just a status check).
 
-When adding an input file, helper script, or environment-controlled setting,
-declare it in the task's inputs or in `cache_context.R`; undeclared inputs
-cannot be detected automatically. Package version/library changes are
-tracked, but manually patching an installed package without changing its
-version requires `PIPELINE_FORCE=1`. Caching preserves a successful run;
-it does not by itself make stochastic analyses reproducible across forced
-rebuilds. Script 7a explicitly seeds its computations as described below.
+When adding an input file or helper script, declare it in the task's inputs;
+undeclared inputs cannot be detected automatically. Environment-controlled
+test settings and changes to the separately installed `Maaslin2` package are
+also not cache inputs. Use the direct command above when intentionally using
+one of those overrides. Caching preserves a successful run; it does not by
+itself make stochastic analyses reproducible across rebuilds. Script 7a
+explicitly seeds its computations as described below.
 
 ### Resuming beta-diversity computation (7a)
 
@@ -132,8 +126,8 @@ Internal checkpoints live under `results/beta_diversity/checkpoints/`
 individual covariate/pair tests, shared complete-case R² baselines,
 dispersion fits/tests, completed PERMANOVA blocks and PCoA ordinations.
 Every checkpoint validates the site's input-file contents, computation
-code, settings, software versions and force-refresh token, plus a checksum
-of its saved result. A change to only the nose input preserves throat
+code, settings and software versions, plus a checksum of its saved result.
+A change to only the nose input preserves throat
 checkpoints. Worker count alone does not invalidate internal checkpoints.
 Changed code conservatively invalidates all 7a checkpoints.
 
@@ -148,31 +142,9 @@ pixi run beta-16s-compute
 
 Look for `Checkpoint hit:` and `Computing:` messages identifying the site,
 metric and test. Completed jobs are reused; interrupted jobs are recomputed.
-`PIPELINE_FORCE=1` deliberately bypasses internal checkpoints too, so omit it
-when resuming. The original per-site `.rds` files keep their reporting fields
-and are assembled atomically after both distances finish. Old files from
-before this checkpoint implementation cannot establish a resumable run.
-
-### Cache integration checks
-
-With Pixi, the project R environment and Python 3.11+ installed, run:
-
-```bash
-python3 -m unittest discover -s tests -v
-```
-
-These checks use isolated temporary projects and tiny synthetic files.
-They exercise real Pixi cache hits, data/code/settings/package changes,
-missing or modified outputs, failed runs, and forced refreshes. They do
-not run the HELIUS analyses or modify their data/results. The beta-diversity
-checks also run the complete 7a script on synthetic phyloseq objects, verify
-resuming with a different worker count, and compare real PERMANOVA and
-betadisper statistics with/without baseline permutations. The R-specific
-checks can also be run directly:
-
-```bash
-pixi run Rscript --vanilla tests/test_beta_checkpoints.R
-```
+The original per-site `.rds` files keep their reporting fields and are
+assembled atomically after both distances finish. Old files from before this
+checkpoint implementation cannot establish a resumable run.
 
 ## Setup
 

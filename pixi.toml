@@ -5,31 +5,17 @@ name = "rpa-microbiomes"
 platforms = ["osx-arm64", "linux-64"]
 version = "0.1.0"
 
-# Cache inputs include scripts, data, software and runtime settings.
+# Cache inputs include scripts, data and the locked software environment.
 # Output patterns are scoped to their producer to avoid cache invalidation
 # when another task writes into a shared results directory.
-[tasks._cache-context]
-cmd = "Rscript --vanilla scripts/cache_context.R"
-description = "Refresh runtime fingerprints before checking analysis caches"
-
-[tasks.install-bioc-data]
-cmd = "R -e \"BiocManager::install('GenomeInfoDbData', ask=FALSE, update=FALSE)\""
-
-[tasks.install-decontam]
-cmd = "R -e \"BiocManager::install('decontam', ask=FALSE, update=FALSE)\""
-
 [tasks.install-maaslin2]
 cmd = "R -e \"BiocManager::install('Maaslin2', ask=FALSE, update=FALSE)\""
 
 [tasks.clean-helius]
 cmd = "Rscript --vanilla scripts/1a_datacleaning_helius.R"
-depends-on = ["_cache-context"]
 inputs = [
     "scripts/1a_datacleaning_helius.R",
-    "scripts/cache_context.R",
     "pixi.lock",
-    "cache/analysis/runtime.R",
-    "cache/analysis/refresh.R",
     "data/raw/250606_HELIUS data Barbara Verhaar.sav",
     "data/raw/231108b_HELIUS data Barbara Verhaar_GECCO.sav",
 ]
@@ -41,13 +27,10 @@ description = "Clean HELIUS clinical/metadata"
 
 [tasks.clean-biome]
 cmd = "Rscript --vanilla scripts/1b_datacleaning_biome.R"
-depends-on = ["_cache-context", "clean-helius"]
+depends-on = ["clean-helius"]
 inputs = [
     "scripts/1b_datacleaning_biome.R",
-    "scripts/cache_context.R",
     "pixi.lock",
-    "cache/analysis/runtime.R",
-    "cache/analysis/refresh.R",
     "data/processed/HELIUSmetadata_clean.RDS",
     "data/raw/sample_sheet_withmeta.csv",
     "data/raw/phyloseq/complete/phyloseq.RDS",
@@ -71,13 +54,10 @@ description = "Clean and filter 16S and shotgun microbiome data into phyloseq ob
 
 [tasks.tableone]
 cmd = "Rscript --vanilla scripts/2_tableone.R"
-depends-on = ["_cache-context", "clean-biome"]
+depends-on = ["clean-biome"]
 inputs = [
     "scripts/2_tableone.R",
-    "scripts/cache_context.R",
     "pixi.lock",
-    "cache/analysis/runtime.R",
-    "cache/analysis/refresh.R",
     "data/processed/HELIUSmetadata_clean.RDS",
     "data/processed/ps_throat_rarefied.RDS",
 ]
@@ -90,13 +70,10 @@ description = "Table 1: cohort characteristics"
 
 [tasks.airpollution-participants]
 cmd = "Rscript --vanilla scripts/3_airpollution_participants.R"
-depends-on = ["_cache-context", "clean-helius", "clean-biome"]
+depends-on = ["clean-helius", "clean-biome"]
 inputs = [
     "scripts/3_airpollution_participants.R",
-    "scripts/cache_context.R",
     "pixi.lock",
-    "cache/analysis/runtime.R",
-    "cache/analysis/refresh.R",
     "data/processed/HELIUSmetadata_clean.RDS",
     "data/processed/ps_throat.RDS",
     "data/processed/ps_nose.RDS",
@@ -109,13 +86,9 @@ description = "Air pollution exposure distribution among HELIUS participants, an
 
 [tasks.airpollution-amsterdam]
 cmd = "Rscript --vanilla scripts/4_airpollution_amsterdam.R"
-depends-on = ["_cache-context"]
 inputs = [
     "scripts/4_airpollution_amsterdam.R",
-    "scripts/cache_context.R",
     "pixi.lock",
-    "cache/analysis/runtime.R",
-    "cache/analysis/refresh.R",
     "data/raw/PC6_2022_ALO_2013_2015.csv",
     "data/raw/geo/amsterdam_gemeente.gpkg",
     "data/raw/geo/cbs_pc6_2022.gpkg",
@@ -127,13 +100,10 @@ description = "Amsterdam-wide PC6 air pollution map"
 
 [tasks.relabund-plots]
 cmd = "Rscript --vanilla scripts/5_relative_abundance_plots.R"
-depends-on = ["_cache-context", "clean-biome"]
+depends-on = ["clean-biome"]
 inputs = [
     "scripts/5_relative_abundance_plots.R",
-    "scripts/cache_context.R",
     "pixi.lock",
-    "cache/analysis/runtime.R",
-    "cache/analysis/refresh.R",
     "data/processed/ps_throat_rarefied.RDS",
     "data/processed/ps_nose_rarefied.RDS",
     "data/processed/shotgun_throat.RDS",
@@ -146,13 +116,10 @@ description = "Compositional (stacked bar) plots of taxon relative abundance"
 
 [tasks.alpha-16s]
 cmd = "Rscript --vanilla scripts/6_alpha_diversity_16s_ethnicity.R"
-depends-on = ["_cache-context", "clean-biome"]
+depends-on = ["clean-biome"]
 inputs = [
     "scripts/6_alpha_diversity_16s_ethnicity.R",
-    "scripts/cache_context.R",
     "pixi.lock",
-    "cache/analysis/runtime.R",
-    "cache/analysis/refresh.R",
     "data/processed/ps_throat_rarefied.RDS",
     "data/processed/ps_nose_rarefied.RDS",
 ]
@@ -163,17 +130,13 @@ description = "Alpha diversity, 16S throat/nose, stratified by ethnicity"
 
 [tasks.beta-16s-compute]
 cmd = "Rscript --vanilla scripts/7a_beta_diversity_16s_compute.R"
-depends-on = ["_cache-context", "clean-biome"]
+depends-on = ["clean-biome"]
 inputs = [
     "scripts/7a_beta_diversity_16s_compute.R",
     "scripts/lib/beta_checkpoint.R",
-    "scripts/cache_context.R",
     "pixi.lock",
-    "cache/analysis/runtime.R",
-    "cache/analysis/refresh.R",
     "data/processed/ps_throat_rarefied.RDS",
     "data/processed/ps_nose_rarefied.RDS",
-    "cache/analysis/beta.R",
 ]
 outputs = [
     "results/beta_diversity{,_test}/cache/beta_diversity_16s_{throat,nose}.rds",
@@ -182,15 +145,11 @@ description = "Beta diversity, 16S throat/nose: PERMANOVA/betadisper computation
 
 [tasks.beta-16s-report]
 cmd = "Rscript --vanilla scripts/7b_beta_diversity_16s_report.R"
-depends-on = ["_cache-context", "beta-16s-compute"]
+depends-on = ["beta-16s-compute"]
 inputs = [
     "scripts/7b_beta_diversity_16s_report.R",
-    "scripts/cache_context.R",
     "pixi.lock",
-    "cache/analysis/runtime.R",
-    "cache/analysis/refresh.R",
     "results/beta_diversity{,_test}/cache/beta_diversity_16s_{throat,nose}.rds",
-    "cache/analysis/beta.R",
 ]
 outputs = [
     "results/beta_diversity{,_test}/{pcoa,betadisper,permanova,covariate_screen,batch_effect}/**/*",
@@ -203,13 +162,10 @@ description = "Beta diversity computation and report, reusing valid cached resul
 
 [tasks.beta-16s-migration]
 cmd = "Rscript --vanilla scripts/8_beta_diversity_16s_migration.R"
-depends-on = ["_cache-context", "clean-biome"]
+depends-on = ["clean-biome"]
 inputs = [
     "scripts/8_beta_diversity_16s_migration.R",
-    "scripts/cache_context.R",
     "pixi.lock",
-    "cache/analysis/runtime.R",
-    "cache/analysis/refresh.R",
     "data/processed/ps_throat_rarefied.RDS",
     "data/processed/ps_nose_rarefied.RDS",
 ]
@@ -220,16 +176,12 @@ description = "Beta diversity, 16S, non-Dutch groups pooled by migration/accultu
 
 [tasks.diffabund-16s]
 cmd = "Rscript --vanilla scripts/9_differential_abundance_16s.R"
-depends-on = ["_cache-context", "clean-biome"]
+depends-on = ["clean-biome"]
 inputs = [
     "scripts/9_differential_abundance_16s.R",
-    "scripts/cache_context.R",
     "pixi.lock",
-    "cache/analysis/runtime.R",
-    "cache/analysis/refresh.R",
     "data/processed/ps_throat_rarefied.RDS",
     "data/processed/ps_nose_rarefied.RDS",
-    "cache/analysis/diffab.R",
 ]
 outputs = [
     "results/differential_abundance{,_test}/summary_pairs_16s.csv",
@@ -239,16 +191,12 @@ description = "Differential abundance, 16S throat/nose, pairwise ethnicity compa
 
 [tasks.diffabund-16s-genus]
 cmd = "Rscript --vanilla scripts/9b_differential_abundance_genus_16s.R"
-depends-on = ["_cache-context", "clean-biome"]
+depends-on = ["clean-biome"]
 inputs = [
     "scripts/9b_differential_abundance_genus_16s.R",
-    "scripts/cache_context.R",
     "pixi.lock",
-    "cache/analysis/runtime.R",
-    "cache/analysis/refresh.R",
     "data/processed/ps_throat_rarefied.RDS",
     "data/processed/ps_nose_rarefied.RDS",
-    "cache/analysis/diffab.R",
 ]
 outputs = [
     "results/differential_abundance_genus{,_test}/summary_pairs_16s.csv",
@@ -259,15 +207,11 @@ description = "Differential abundance at genus level, 16S throat/nose, pairwise 
 
 [tasks.upset-diffabund-16s]
 cmd = "Rscript --vanilla scripts/10_upset_diffabund_16s.R"
-depends-on = ["_cache-context", "diffabund-16s"]
+depends-on = ["diffabund-16s"]
 inputs = [
     "scripts/10_upset_diffabund_16s.R",
-    "scripts/cache_context.R",
     "pixi.lock",
-    "cache/analysis/runtime.R",
-    "cache/analysis/refresh.R",
     "results/differential_abundance{,_test}/maaslin2/maaslin2_ethnicity_results_16s_*.csv",
-    "cache/analysis/diffab.R",
 ]
 outputs = [
     "results/differential_abundance{,_test}/upset/*",
@@ -276,13 +220,10 @@ description = "Overlap of significant differentially abundant taxa across ethnic
 
 [tasks.alpha-shotgun]
 cmd = "Rscript --vanilla scripts/11_alpha_diversity_shotgun.R"
-depends-on = ["_cache-context", "clean-biome"]
+depends-on = ["clean-biome"]
 inputs = [
     "scripts/11_alpha_diversity_shotgun.R",
-    "scripts/cache_context.R",
     "pixi.lock",
-    "cache/analysis/runtime.R",
-    "cache/analysis/refresh.R",
     "data/processed/shotgun_throat.RDS",
     "data/processed/shotgun_tongue.RDS",
 ]
@@ -293,13 +234,10 @@ description = "Alpha diversity, shotgun tongue/throat, stratified by ethnicity"
 
 [tasks.figure1]
 cmd = "Rscript --vanilla scripts/12_figure1_assembly.R"
-depends-on = ["_cache-context", "clean-biome", "beta-16s-compute", "airpollution-amsterdam"]
+depends-on = ["clean-biome", "beta-16s-compute", "airpollution-amsterdam"]
 inputs = [
     "scripts/12_figure1_assembly.R",
-    "scripts/cache_context.R",
     "pixi.lock",
-    "cache/analysis/runtime.R",
-    "cache/analysis/refresh.R",
     "data/processed/HELIUSmetadata_clean.RDS",
     "data/processed/ps_throat.RDS",
     "data/processed/ps_nose.RDS",
@@ -307,7 +245,6 @@ inputs = [
     "data/processed/ps_nose_rarefied.RDS",
     "results/beta_diversity{,_test}/cache/beta_diversity_16s_{throat,nose}.rds",
     "results/airpollution/amsterdam_pc6_geo.rds",
-    "cache/analysis/beta.R",
 ]
 outputs = [
     "results/figures/figure1.*",
@@ -317,15 +254,11 @@ description = "Assemble Figure 1: Amsterdam air pollution map, sampling seasonal
 
 [tasks.figure2]
 cmd = "Rscript --vanilla scripts/13_figure2_assembly.R"
-depends-on = ["_cache-context", "beta-16s-compute"]
+depends-on = ["beta-16s-compute"]
 inputs = [
     "scripts/13_figure2_assembly.R",
-    "scripts/cache_context.R",
     "pixi.lock",
-    "cache/analysis/runtime.R",
-    "cache/analysis/refresh.R",
     "results/beta_diversity{,_test}/cache/beta_diversity_16s_{throat,nose}.rds",
-    "cache/analysis/beta.R",
 ]
 outputs = [
     "results/figures/figure2.*",
@@ -335,17 +268,13 @@ description = "Assemble Figure 2: pairwise PERMANOVA (weighted UniFrac) and cova
 
 [tasks.figure3]
 cmd = "Rscript --vanilla scripts/14_figure3_assembly.R"
-depends-on = ["_cache-context", "diffabund-16s"]
+depends-on = ["diffabund-16s"]
 inputs = [
     "scripts/14_figure3_assembly.R",
-    "scripts/cache_context.R",
     "pixi.lock",
-    "cache/analysis/runtime.R",
-    "cache/analysis/refresh.R",
     "results/differential_abundance{,_test}/summary_pairs_16s.csv",
     "results/differential_abundance{,_test}/maaslin2/maaslin2_ethnicity_results_16s_*.csv",
     "results/differential_abundance{,_test}/confounder_assessment/*.csv",
-    "cache/analysis/diffab.R",
 ]
 outputs = [
     "results/figures/figure3.*",
@@ -358,6 +287,7 @@ depends-on = ["tableone", "airpollution-participants", "airpollution-amsterdam",
 description = "Run the full analysis pipeline end to end"
 
 [dependencies]
+bioconductor-decontam = { version = ">=1.26.0,<1.27", channel = "bioconda" }
 bioconductor-phyloseq = { version = ">=1.50.0,<2", channel = "bioconda" }
 r-tidyverse = ">=2.0.0,<3"
 r-ggplot2 = ">=4.0.1,<5"

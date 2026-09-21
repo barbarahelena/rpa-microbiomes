@@ -18,6 +18,7 @@ environments:
       - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-biomformat-1.34.0-r44hdfd78af_0.tar.bz2
       - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-biostrings-2.74.0-r44h3df3fcb_1.tar.bz2
       - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-data-packages-20260207-hdfd78af_0.conda
+      - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-decontam-1.26.0-r44hdfd78af_0.tar.bz2
       - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-edger-4.4.0-r44h3df3fcb_0.tar.bz2
       - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-genomeinfodb-1.42.0-r44hdfd78af_2.tar.bz2
       - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-genomeinfodbdata-1.2.13-r44hdfd78af_0.tar.bz2
@@ -409,6 +410,7 @@ environments:
       - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-biomformat-1.34.0-r44hdfd78af_0.tar.bz2
       - conda: https://conda.anaconda.org/bioconda/osx-arm64/bioconductor-biostrings-2.74.0-r44h1b44f6e_1.tar.bz2
       - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-data-packages-20260207-hdfd78af_0.conda
+      - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-decontam-1.26.0-r44hdfd78af_0.tar.bz2
       - conda: https://conda.anaconda.org/bioconda/osx-arm64/bioconductor-edger-4.4.0-r44h1b44f6e_0.tar.bz2
       - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-genomeinfodb-1.42.0-r44hdfd78af_2.tar.bz2
       - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-genomeinfodbdata-1.2.13-r44hdfd78af_0.tar.bz2
@@ -956,6 +958,16 @@ packages:
   license: MIT
   size: 274646
   timestamp: 1770502117512
+- conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-decontam-1.26.0-r44hdfd78af_0.tar.bz2
+  sha256: 6887b2be12be9d78dac2d263e6c4329784566748e3a81a4cb40a6d13e3e66642
+  md5: ad49011ef2718b7c1aa976768dd49f97
+  depends:
+  - r-base >=4.4,<4.5.0a0
+  - r-ggplot2 >=2.1.0
+  - r-reshape2 >=1.4.1
+  license: Artistic-2.0
+  size: 796311
+  timestamp: 1734190794428
 - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-edger-4.4.0-r44h3df3fcb_0.tar.bz2
   sha256: 2930abe22ca41521a6d09d6b042bd6cf2c99ba55ead766924de37a3c9e60599c
   md5: 249af741dc8dac49eb847ac323b1f2ab
