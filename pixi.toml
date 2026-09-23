@@ -5,31 +5,289 @@ name = "rpa-microbiomes"
 platforms = ["osx-arm64", "linux-64"]
 version = "0.1.0"
 
-[tasks]
-install-bioc-data = "R -e \"BiocManager::install('GenomeInfoDbData', ask=FALSE, update=FALSE)\""
-install-decontam = "R -e \"BiocManager::install('decontam', ask=FALSE, update=FALSE)\""
-install-maaslin2 = "R -e \"BiocManager::install('Maaslin2', ask=FALSE, update=FALSE)\""
-clean-helius = { cmd = "Rscript scripts/1a_datacleaning_helius.R", description = "Clean HELIUS clinical/metadata" }
-clean-biome = { cmd = "Rscript scripts/1b_datacleaning_biome.R", depends-on = ["clean-helius"], description = "Clean and filter 16S and shotgun microbiome data into phyloseq objects" }
-tableone = { cmd = "Rscript scripts/2_tableone.R", depends-on = ["clean-biome"], description = "Table 1: cohort characteristics" }
-airpollution-participants = { cmd = "Rscript scripts/3_airpollution_participants.R", depends-on = ["clean-helius", "clean-biome"], description = "Air pollution exposure distribution among HELIUS participants, and swab collection seasonality by ethnicity (16S throat/nose)" }
-airpollution-amsterdam = { cmd = "Rscript scripts/4_airpollution_amsterdam.R", description = "Amsterdam-wide PC6 air pollution map" }
-relabund-plots = { cmd = "Rscript scripts/5_relative_abundance_plots.R", depends-on = ["clean-biome"], description = "Compositional (stacked bar) plots of taxon relative abundance" }
-alpha-16s = { cmd = "Rscript scripts/6_alpha_diversity_16s_ethnicity.R", depends-on = ["clean-biome"], description = "Alpha diversity, 16S throat/nose, stratified by ethnicity" }
-beta-16s-compute = { cmd = "Rscript scripts/7a_beta_diversity_16s_compute.R", depends-on = ["clean-biome"], description = "Beta diversity, 16S throat/nose: PERMANOVA/betadisper computation (permutation-heavy, cached)" }
-beta-16s-report = { cmd = "Rscript scripts/7b_beta_diversity_16s_report.R", description = "Beta diversity, 16S throat/nose: rebuild plots/tables from cached PERMANOVA/betadisper results" }
-beta-16s = { cmd = "Rscript scripts/7b_beta_diversity_16s_report.R", depends-on = ["beta-16s-compute"], description = "Beta diversity, 16S throat/nose, stratified by ethnicity (PERMANOVA, betadisper) - full compute + report" }
-beta-16s-migration = { cmd = "Rscript scripts/8_beta_diversity_16s_migration.R", depends-on = ["clean-biome"], description = "Beta diversity, 16S, non-Dutch groups pooled by migration/acculturation" }
-diffabund-16s = { cmd = "Rscript scripts/9_differential_abundance_16s.R", depends-on = ["clean-biome"], description = "Differential abundance, 16S throat/nose, pairwise ethnicity comparisons (MaAsLin2)" }
-diffabund-16s-genus = { cmd = "Rscript scripts/9b_differential_abundance_genus_16s.R", depends-on = ["clean-biome"], description = "Differential abundance at genus level, 16S throat/nose, pairwise ethnicity comparisons (MaAsLin2)" }
-upset-diffabund-16s = { cmd = "Rscript scripts/10_upset_diffabund_16s.R", depends-on = ["diffabund-16s"], description = "Overlap of significant differentially abundant taxa across ethnicity pairs" }
-alpha-shotgun = { cmd = "Rscript scripts/11_alpha_diversity_shotgun.R", depends-on = ["clean-biome"], description = "Alpha diversity, shotgun tongue/throat, stratified by ethnicity" }
-figure1 = { cmd = "Rscript scripts/12_figure1_assembly.R", depends-on = ["clean-biome", "beta-16s-compute", "airpollution-amsterdam"], description = "Assemble Figure 1: Amsterdam air pollution map, sampling seasonality, Shannon diversity, and weighted UniFrac PCoA panels (16S throat/nose); betadisper moved to supplement" }
-figure2 = { cmd = "Rscript scripts/13_figure2_assembly.R", depends-on = ["beta-16s-compute"], description = "Assemble Figure 2: pairwise PERMANOVA (weighted UniFrac) and covariate effects on beta diversity (16S throat/nose)" }
-figure3 = { cmd = "Rscript scripts/14_figure3_assembly.R", depends-on = ["diffabund-16s"], description = "Assemble Figure 3: pairwise DA taxa counts and highlighted volcano plots (16S throat/nose), plus all-pairs volcano supplements" }
-pipeline = { depends-on = ["tableone", "airpollution-participants", "airpollution-amsterdam", "relabund-plots", "alpha-16s", "beta-16s", "beta-16s-migration", "upset-diffabund-16s", "diffabund-16s-genus", "alpha-shotgun", "figure1", "figure2", "figure3"], description = "Run the full analysis pipeline end to end" }
+# Cache inputs include scripts, data and the locked software environment.
+# Output patterns are scoped to their producer to avoid cache invalidation
+# when another task writes into a shared results directory.
+[tasks.install-maaslin2]
+cmd = "R -e \"BiocManager::install('Maaslin2', ask=FALSE, update=FALSE)\""
+
+[tasks.clean-helius]
+cmd = "Rscript --vanilla scripts/1a_datacleaning_helius.R"
+inputs = [
+    "scripts/1a_datacleaning_helius.R",
+    "pixi.lock",
+    "data/raw/250606_HELIUS data Barbara Verhaar.sav",
+    "data/raw/231108b_HELIUS data Barbara Verhaar_GECCO.sav",
+]
+outputs = [
+    "data/processed/HELIUSmetadata_clean.RDS",
+    "results/tableone/meta_raw_str.txt",
+]
+description = "Clean HELIUS clinical/metadata"
+
+[tasks.clean-biome]
+cmd = "Rscript --vanilla scripts/1b_datacleaning_biome.R"
+depends-on = ["clean-helius"]
+inputs = [
+    "scripts/1b_datacleaning_biome.R",
+    "pixi.lock",
+    "data/processed/HELIUSmetadata_clean.RDS",
+    "data/raw/sample_sheet_withmeta.csv",
+    "data/raw/phyloseq/complete/phyloseq.RDS",
+    "data/raw/combined_table.txt",
+    "data/raw/combined_table2.txt",
+]
+outputs = [
+    "data/processed/ps_throat_rarefied.RDS",
+    "data/processed/ps_nose_rarefied.RDS",
+    "data/processed/ps_throat.RDS",
+    "data/processed/ps_nose.RDS",
+    "data/processed/shotgun_throat.RDS",
+    "data/processed/shotgun_tongue.RDS",
+    "data/processed/shotgun_taxtable.RDS",
+    "data/processed/metaphlantable_tot.RDS",
+    "data/processed/metaphlan_tongue.RDS",
+    "data/processed/metaphlan_throat.RDS",
+    "results/rarefaction/*.pdf",
+]
+description = "Clean and filter 16S and shotgun microbiome data into phyloseq objects"
+
+[tasks.tableone]
+cmd = "Rscript --vanilla scripts/2_tableone.R"
+depends-on = ["clean-biome"]
+inputs = [
+    "scripts/2_tableone.R",
+    "pixi.lock",
+    "data/processed/HELIUSmetadata_clean.RDS",
+    "data/processed/ps_throat_rarefied.RDS",
+]
+outputs = [
+    "results/tableone/meta_str.txt",
+    "results/tableone/table_shotgun.csv",
+    "results/tableone/table_16S.csv",
+]
+description = "Table 1: cohort characteristics"
+
+[tasks.airpollution-participants]
+cmd = "Rscript --vanilla scripts/3_airpollution_participants.R"
+depends-on = ["clean-helius", "clean-biome"]
+inputs = [
+    "scripts/3_airpollution_participants.R",
+    "pixi.lock",
+    "data/processed/HELIUSmetadata_clean.RDS",
+    "data/processed/ps_throat.RDS",
+    "data/processed/ps_nose.RDS",
+]
+outputs = [
+    "results/airpollution/participants_*",
+    "results/sample_metadata/*",
+]
+description = "Air pollution exposure distribution among HELIUS participants, and swab collection seasonality by ethnicity (16S throat/nose)"
+
+[tasks.airpollution-amsterdam]
+cmd = "Rscript --vanilla scripts/4_airpollution_amsterdam.R"
+inputs = [
+    "scripts/4_airpollution_amsterdam.R",
+    "pixi.lock",
+    "data/raw/PC6_2022_ALO_2013_2015.csv",
+    "data/raw/geo/amsterdam_gemeente.gpkg",
+    "data/raw/geo/cbs_pc6_2022.gpkg",
+]
+outputs = [
+    "results/airpollution/amsterdam_*",
+]
+description = "Amsterdam-wide PC6 air pollution map"
+
+[tasks.relabund-plots]
+cmd = "Rscript --vanilla scripts/5_relative_abundance_plots.R"
+depends-on = ["clean-biome"]
+inputs = [
+    "scripts/5_relative_abundance_plots.R",
+    "pixi.lock",
+    "data/processed/ps_throat_rarefied.RDS",
+    "data/processed/ps_nose_rarefied.RDS",
+    "data/processed/shotgun_throat.RDS",
+    "data/processed/shotgun_tongue.RDS",
+]
+outputs = [
+    "results/composition/*.pdf",
+]
+description = "Compositional (stacked bar) plots of taxon relative abundance"
+
+[tasks.alpha-16s]
+cmd = "Rscript --vanilla scripts/6_alpha_diversity_16s_ethnicity.R"
+depends-on = ["clean-biome"]
+inputs = [
+    "scripts/6_alpha_diversity_16s_ethnicity.R",
+    "pixi.lock",
+    "data/processed/ps_throat_rarefied.RDS",
+    "data/processed/ps_nose_rarefied.RDS",
+]
+outputs = [
+    "results/alpha_diversity/*_16s_*",
+]
+description = "Alpha diversity, 16S throat/nose, stratified by ethnicity"
+
+[tasks.beta-16s-compute]
+cmd = "Rscript --vanilla scripts/7a_beta_diversity_16s_compute.R"
+depends-on = ["clean-biome"]
+inputs = [
+    "scripts/7a_beta_diversity_16s_compute.R",
+    "scripts/lib/beta_checkpoint.R",
+    "pixi.lock",
+    "data/processed/ps_throat_rarefied.RDS",
+    "data/processed/ps_nose_rarefied.RDS",
+]
+outputs = [
+    "results/beta_diversity{,_test}/cache/beta_diversity_16s_{throat,nose}.rds",
+]
+description = "Beta diversity, 16S throat/nose: PERMANOVA/betadisper computation (permutation-heavy, cached)"
+
+[tasks.beta-16s-report]
+cmd = "Rscript --vanilla scripts/7b_beta_diversity_16s_report.R"
+depends-on = ["beta-16s-compute"]
+inputs = [
+    "scripts/7b_beta_diversity_16s_report.R",
+    "pixi.lock",
+    "results/beta_diversity{,_test}/cache/beta_diversity_16s_{throat,nose}.rds",
+]
+outputs = [
+    "results/beta_diversity{,_test}/{pcoa,betadisper,permanova,covariate_screen,batch_effect}/**/*",
+]
+description = "Beta diversity, 16S throat/nose: rebuild plots/tables from cached PERMANOVA/betadisper results"
+
+[tasks.beta-16s]
+depends-on = ["beta-16s-report"]
+description = "Beta diversity computation and report, reusing valid cached results"
+
+[tasks.beta-16s-migration]
+cmd = "Rscript --vanilla scripts/8_beta_diversity_16s_migration.R"
+depends-on = ["clean-biome"]
+inputs = [
+    "scripts/8_beta_diversity_16s_migration.R",
+    "pixi.lock",
+    "data/processed/ps_throat_rarefied.RDS",
+    "data/processed/ps_nose_rarefied.RDS",
+]
+outputs = [
+    "results/beta_diversity_migration/*",
+]
+description = "Beta diversity, 16S, non-Dutch groups pooled by migration/acculturation"
+
+[tasks.diffabund-16s]
+cmd = "Rscript --vanilla scripts/9_differential_abundance_16s.R"
+depends-on = ["clean-biome"]
+inputs = [
+    "scripts/9_differential_abundance_16s.R",
+    "pixi.lock",
+    "data/processed/ps_throat_rarefied.RDS",
+    "data/processed/ps_nose_rarefied.RDS",
+]
+outputs = [
+    "results/differential_abundance{,_test}/summary_pairs_16s.csv",
+    "results/differential_abundance{,_test}/{confounder_assessment,maaslin2,volcano,heatmap,forestplot,boxplots}/**/*",
+]
+description = "Differential abundance, 16S throat/nose, pairwise ethnicity comparisons (MaAsLin2)"
+
+[tasks.diffabund-16s-genus]
+cmd = "Rscript --vanilla scripts/9b_differential_abundance_genus_16s.R"
+depends-on = ["clean-biome"]
+inputs = [
+    "scripts/9b_differential_abundance_genus_16s.R",
+    "pixi.lock",
+    "data/processed/ps_throat_rarefied.RDS",
+    "data/processed/ps_nose_rarefied.RDS",
+]
+outputs = [
+    "results/differential_abundance_genus{,_test}/summary_pairs_16s.csv",
+    "results/differential_abundance_genus{,_test}/agglomeration_summary_16s.csv",
+    "results/differential_abundance_genus{,_test}/{confounder_assessment,maaslin2,volcano,heatmap,forestplot,boxplots}/**/*",
+]
+description = "Differential abundance at genus level, 16S throat/nose, pairwise ethnicity comparisons (MaAsLin2)"
+
+[tasks.upset-diffabund-16s]
+cmd = "Rscript --vanilla scripts/10_upset_diffabund_16s.R"
+depends-on = ["diffabund-16s"]
+inputs = [
+    "scripts/10_upset_diffabund_16s.R",
+    "pixi.lock",
+    "results/differential_abundance{,_test}/maaslin2/maaslin2_ethnicity_results_16s_*.csv",
+]
+outputs = [
+    "results/differential_abundance{,_test}/upset/*",
+]
+description = "Overlap of significant differentially abundant taxa across ethnicity pairs"
+
+[tasks.alpha-shotgun]
+cmd = "Rscript --vanilla scripts/11_alpha_diversity_shotgun.R"
+depends-on = ["clean-biome"]
+inputs = [
+    "scripts/11_alpha_diversity_shotgun.R",
+    "pixi.lock",
+    "data/processed/shotgun_throat.RDS",
+    "data/processed/shotgun_tongue.RDS",
+]
+outputs = [
+    "results/alpha_diversity/*_shotgun_*",
+]
+description = "Alpha diversity, shotgun tongue/throat, stratified by ethnicity"
+
+[tasks.figure1]
+cmd = "Rscript --vanilla scripts/12_figure1_assembly.R"
+depends-on = ["clean-biome", "beta-16s-compute", "airpollution-amsterdam"]
+inputs = [
+    "scripts/12_figure1_assembly.R",
+    "pixi.lock",
+    "data/processed/HELIUSmetadata_clean.RDS",
+    "data/processed/ps_throat.RDS",
+    "data/processed/ps_nose.RDS",
+    "data/processed/ps_throat_rarefied.RDS",
+    "data/processed/ps_nose_rarefied.RDS",
+    "results/beta_diversity{,_test}/cache/beta_diversity_16s_{throat,nose}.rds",
+    "results/airpollution/amsterdam_pc6_geo.rds",
+]
+outputs = [
+    "results/figures/figure1.*",
+    "results/figures/figure1_supp_*",
+]
+description = "Assemble Figure 1: Amsterdam air pollution map, sampling seasonality, Shannon diversity, and weighted UniFrac PCoA panels (16S throat/nose); betadisper moved to supplement"
+
+[tasks.figure2]
+cmd = "Rscript --vanilla scripts/13_figure2_assembly.R"
+depends-on = ["beta-16s-compute"]
+inputs = [
+    "scripts/13_figure2_assembly.R",
+    "pixi.lock",
+    "results/beta_diversity{,_test}/cache/beta_diversity_16s_{throat,nose}.rds",
+]
+outputs = [
+    "results/figures/figure2.*",
+    "results/figures/figure2_supp_*",
+]
+description = "Assemble Figure 2: pairwise PERMANOVA (weighted UniFrac) and covariate effects on beta diversity (16S throat/nose)"
+
+[tasks.figure3]
+cmd = "Rscript --vanilla scripts/14_figure3_assembly.R"
+depends-on = ["diffabund-16s"]
+inputs = [
+    "scripts/14_figure3_assembly.R",
+    "pixi.lock",
+    "results/differential_abundance{,_test}/summary_pairs_16s.csv",
+    "results/differential_abundance{,_test}/maaslin2/maaslin2_ethnicity_results_16s_*.csv",
+    "results/differential_abundance{,_test}/confounder_assessment/*.csv",
+]
+outputs = [
+    "results/figures/figure3.*",
+    "results/figures/figure3_supp_*",
+]
+description = "Assemble Figure 3: pairwise DA taxa counts and highlighted volcano plots (16S throat/nose), plus all-pairs volcano supplements"
+
+[tasks.pipeline]
+depends-on = ["tableone", "airpollution-participants", "airpollution-amsterdam", "relabund-plots", "alpha-16s", "beta-16s", "beta-16s-migration", "upset-diffabund-16s", "diffabund-16s-genus", "alpha-shotgun", "figure1", "figure2", "figure3"]
+description = "Run the full analysis pipeline end to end"
 
 [dependencies]
+bioconductor-decontam = { version = ">=1.26.0,<1.27", channel = "bioconda" }
 bioconductor-phyloseq = { version = ">=1.50.0,<2", channel = "bioconda" }
 r-tidyverse = ">=2.0.0,<3"
 r-ggplot2 = ">=4.0.1,<5"
