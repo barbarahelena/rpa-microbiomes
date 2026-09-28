@@ -107,6 +107,15 @@ ps <- subset_taxa(ps, !str_detect(Family, "Mitochondria") | is.na(Family))
 ps_freq <- prune_samples(!is.na(sample_data(ps)$Nucl_Acid_Conc) & sample_data(ps)$Nucl_Acid_Conc > 0, ps)
 contam_freq <- isContaminant(ps_freq, method = "frequency", conc = "Nucl_Acid_Conc")
 cont1 <- rownames(contam_freq)[which(contam_freq$contaminant == TRUE)]
+length(cont1) # 11 ASVs
+asvsfreq <- contam_freq |> filter(contaminant == TRUE) 
+tax <- as.data.frame(ps@tax_table)
+tax$ASV <- rownames(tax)
+tax |> filter(ASV %in% rownames(asvsfreq)) 
+tab <- as.data.frame(t(as(ps@otu_table, "matrix")))
+asv <- tab[!str_detect(rownames(tab), "NEG_CON"), colnames(tab) == "ASV_2714"]
+summary(asv == 0)
+asv[which(asv != 0)]
 table(contam_freq$contaminant)
 plot_frequency(ps_freq, taxa_names(ps_freq)[sample(which(contam_freq$contaminant),3)], conc="Nucl_Acid_Conc") +
     xlab("DNA Concentration")
