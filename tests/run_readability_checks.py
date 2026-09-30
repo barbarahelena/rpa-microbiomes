@@ -97,8 +97,9 @@ def static_checks():
         if cmd.startswith("Rscript --vanilla scripts/"):
             script = cmd.removeprefix("Rscript --vanilla ")
             assert script in task["inputs"]
-            if '"plot_style.R"' in (ROOT / script).read_text():
-                assert "scripts/lib/plot_style.R" in task["inputs"]
+            for helper in re.findall(r'source\(here::here\("scripts", "lib", "([^\"]+)"\)\)',
+                                     (ROOT / script).read_text()):
+                assert f"scripts/lib/{helper}" in task["inputs"], (name, helper)
     check("task graph, script paths and shared-helper inputs valid", True)
     d = sandbox("parse")
     run_r(d, 'for (f in list.files("scripts", "[.]R$", recursive=TRUE, full.names=TRUE)) parse(f)\n', "parse")
@@ -235,6 +236,9 @@ stopifnot(length(list.files("results", "[.]pdf$", recursive=TRUE)) == 0L)
 if __name__ == "__main__":
     print("Artifacts:", WORK, flush=True)
     static_checks()
+    helper_dir = sandbox("shared-plot-helpers")
+    run_r(helper_dir, (ROOT / "tests/shared_plot_helpers.R").read_text(), "helpers")
+    check("shared plot helper edge cases", True)
     missing_cache_checks()
     migration_check()
     da_reporting_checks()

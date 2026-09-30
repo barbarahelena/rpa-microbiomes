@@ -13,6 +13,7 @@ library(ggthemes)
 
 ## Functions
 source(here::here("scripts", "lib", "plot_style.R"))
+source(here::here("scripts", "lib", "diversity_plots.R"))
 
 ## Setup
 setwd(here::here())
@@ -240,37 +241,11 @@ for (site_name in c("throat", "nose")) {
         )
 
         ## ---- PCoA ordination ----
-        eig <- pcoa$values$Eigenvalues
-        var_explained <- round(100 * eig / sum(eig), 1)
-
-        ## Build ordination data frame
-        ord_df <- data.frame(
-            PCo1 = pcoa$vectors[, 1],
-            PCo2 = pcoa$vectors[, 2],
-            EthnicityTotal = meta$EthnicityTotal
-        )
-
-        ## PCoA plot coloured by ethnicity
-        ## Always show large 95% ellipses. 4+ groups additionally get small
-        ## centroids on top (ellipses alone get hard to pin down once there
-        ## are several overlapping groups), plus the omnibus PERMANOVA R2/p
-        ## annotated top-right.
-        n_groups <- nlevels(droplevels(meta$EthnicityTotal))
-
-        p_pcoa <- ggplot(ord_df, aes(x = PCo1, y = PCo2, colour = EthnicityTotal)) +
-            geom_point(alpha = 0.5, size = 1) +
-            stat_ellipse(level = 0.95, linewidth = 0.8)
-
-        if (n_groups > 3) {
-            centroids <- ord_df |>
-                group_by(EthnicityTotal) |>
-                summarise(PCo1 = mean(PCo1), PCo2 = mean(PCo2), .groups = "drop")
-            p_pcoa <- p_pcoa +
-                geom_point(data = centroids,
-                           aes(x = PCo1, y = PCo2, fill = EthnicityTotal),
-                           shape = 21, colour = "black", size = 4, stroke = 0.8) +
-                scale_fill_manual(values = eth_colours, guide = "none")
-        }
+        prepared <- prepare_pcoa_plot_data(meta, pcoa)
+        var_explained <- prepared$var_explained
+        ord_df <- prepared$ord_df
+        n_groups <- prepared$n_groups
+        p_pcoa <- plot_ethnicity_pcoa(ord_df, n_groups, eth_colours)
 
         p_pcoa <- p_pcoa +
             scale_colour_manual(values = eth_colours) +

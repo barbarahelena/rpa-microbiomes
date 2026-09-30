@@ -104,6 +104,7 @@ cmd = "Rscript --vanilla scripts/04_air_pollution_participants_report.R"
 depends-on = ["airpollution-participants-compute"]
 inputs = [
     "scripts/04_air_pollution_participants_report.R",
+    "scripts/lib/plot_annotations.R",
     "scripts/lib/plot_style.R",
     "pixi.lock",
     "results/airpollution/cache/participant_exposure.rds",
@@ -118,6 +119,7 @@ cmd = "Rscript --vanilla scripts/05_sample_characteristics.R"
 depends-on = ["clean-biome"]
 inputs = [
     "scripts/05_sample_characteristics.R",
+    "scripts/lib/diversity_plots.R",
     "scripts/lib/plot_style.R",
     "pixi.lock",
     "data/processed/ps_throat.RDS",
@@ -187,6 +189,7 @@ cmd = "Rscript --vanilla scripts/08_alpha_diversity_16s_ethnicity_report.R"
 depends-on = ["alpha-16s-compute"]
 inputs = [
     "scripts/08_alpha_diversity_16s_ethnicity_report.R",
+    "scripts/lib/plot_annotations.R",
     "scripts/lib/plot_style.R",
     "pixi.lock",
     "results/alpha_diversity/cache/alpha_16s_*.rds",
@@ -253,6 +256,7 @@ cmd = "Rscript --vanilla scripts/10_beta_diversity_16s_ethnicity_report.R"
 depends-on = ["beta-16s-compute"]
 inputs = [
     "scripts/10_beta_diversity_16s_ethnicity_report.R",
+    "scripts/lib/diversity_plots.R",
     "scripts/lib/plot_style.R",
     "pixi.lock",
     "results/beta_diversity{,_test}/cache/beta_diversity_16s_{throat,nose}.rds",
@@ -319,6 +323,7 @@ cmd = "Rscript --vanilla scripts/12_differential_abundance_16s_asv_ethnicity_rep
 depends-on = ["diffabund-16s-compute"]
 inputs = [
     "scripts/12_differential_abundance_16s_asv_ethnicity_report.R",
+    "scripts/lib/abundance.R",
     "scripts/lib/plot_style.R",
     "pixi.lock",
     "results/differential_abundance{,_test}/cache/da_asv.rds",
@@ -356,6 +361,7 @@ cmd = "Rscript --vanilla scripts/13_differential_abundance_16s_genus_ethnicity_r
 depends-on = ["diffabund-16s-genus-compute"]
 inputs = [
     "scripts/13_differential_abundance_16s_genus_ethnicity_report.R",
+    "scripts/lib/abundance.R",
     "scripts/lib/plot_style.R",
     "pixi.lock",
     "results/differential_abundance_genus{,_test}/cache/da_genus.rds",
@@ -388,6 +394,8 @@ depends-on = [
 ]
 inputs = [
     "scripts/14_figure1.R",
+    "scripts/lib/plot_annotations.R",
+    "scripts/lib/diversity_plots.R",
     "scripts/lib/plot_style.R",
     "pixi.lock",
     "results/airpollution/cache/participant_exposure.rds",
@@ -422,6 +430,7 @@ cmd = "Rscript --vanilla scripts/16_figure3.R"
 depends-on = ["diffabund-16s-report"]
 inputs = [
     "scripts/16_figure3.R",
+    "scripts/lib/abundance.R",
     "scripts/lib/plot_style.R",
     "pixi.lock",
     "results/differential_abundance{,_test}/summary_pairs_16s.csv",

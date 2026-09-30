@@ -10,6 +10,7 @@ library(pheatmap)
 
 ## Functions
 source(here::here("scripts", "lib", "plot_style.R"))
+source(here::here("scripts", "lib", "abundance.R"))
 
 ## Setup
 setwd(here::here())
@@ -66,19 +67,9 @@ report_da_pair <- function(cache, outdir) {
                 qval < 0.05 ~ "q < 0.05",
                 qval < 0.25 ~ "q < 0.25",
                 TRUE ~ "NS"
-            ),
-            ## Use the cleaned taxonomy label (built in 02_clean_microbiome.R)
-            label = case_when(
-                !is.na(Tax) & Tax != "" ~ Tax,
-                TRUE ~ feature
             )
         ) |>
-        ## Make labels unique by appending the representative ASV ID for
-        ## duplicates (the same genus name can occur under two lineages,
-        ## which tax_glom keeps as separate features)
-        group_by(label) |>
-        mutate(label = if (n() > 1) paste0(label, " (", feature, ")") else label) |>
-        ungroup()
+        make_taxon_labels()
 
     volcano_colours <- c("q < 0.05" = "#E31A1C", "q < 0.25" = "#FF7F00",
                          "NS" = "grey60")
@@ -126,23 +117,7 @@ report_da_pair <- function(cache, outdir) {
             slice_min(qval, n = min(30, n_sig))
 
         ## Get relative abundance for these taxa
-        ps_rel <- transform_sample_counts(ps, function(x) x / sum(x))
-        abund_mat <- as.data.frame(otu_table(ps_rel))
-        if (taxa_are_rows(ps_rel)) {
-            abund_mat <- abund_mat[top_for_heatmap$feature, , drop = FALSE]
-        } else {
-            abund_mat <- t(abund_mat)[top_for_heatmap$feature, , drop = FALSE]
-        }
-
-        ## Compute mean abundance per ethnicity. Both sapply and vapply
-        ## silently simplify a length-1 per-group result down to a bare
-        ## vector (losing the row dimension) when only one taxon is
-        ## significant, so build the matrix explicitly via cbind instead,
-        ## which always preserves it regardless of row count.
-        mean_abund <- sapply(levels(meta$EthnicityTotal), function(eth) {
-            samples <- rownames(meta[meta$EthnicityTotal == eth, ])
-            rowMeans(abund_mat[, samples, drop = FALSE])
-        }, simplify = FALSE) |> do.call(cbind, args = _)
+        mean_abund <- mean_abundance_by_ethnicity(ps, meta, top_for_heatmap$feature)
 
         ## Use genus names for row labels
         rownames(mean_abund) <- top_for_heatmap$label
@@ -276,24 +251,7 @@ report_da_pair <- function(cache, outdir) {
             filter(qval < 0.05) |>
             slice_min(qval, n = min(12, n_strict))
 
-        ps_rel <- transform_sample_counts(ps, function(x) x / sum(x))
-        abund_df <- as.data.frame(otu_table(ps_rel))
-        if (taxa_are_rows(ps_rel)) {
-            abund_df <- as.data.frame(t(abund_df))
-        }
-
-        ## Select top taxa and pivot
-        box_df <- abund_df[, top_box$feature, drop = FALSE] |>
-            rownames_to_column("sample_id") |>
-            pivot_longer(-sample_id, names_to = "feature", values_to = "rel_abund") |>
-            left_join(
-                meta |> rownames_to_column("sample_id") |>
-                    select(sample_id, EthnicityTotal),
-                by = "sample_id"
-            ) |>
-            left_join(top_box |> select(feature, label, qval), by = "feature") |>
-            mutate(label = paste0(label, "\n(q = ",
-                                  formatC(qval, format = "e", digits = 1), ")"))
+        box_df <- prepare_taxon_boxplot_data(ps, meta, top_box)
 
         ## Small pseudocount so zero-abundance samples remain visible on log scale
         ggplot(box_df, aes(x = EthnicityTotal, y = rel_abund + 1e-6, fill = EthnicityTotal)) +

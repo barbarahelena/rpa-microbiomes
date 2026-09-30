@@ -12,6 +12,7 @@ library(phyloseq)
 
 ## Functions
 source(here::here("scripts", "lib", "plot_style.R"))
+source(here::here("scripts", "lib", "plot_annotations.R"))
 
 ## Setup
 setwd(here::here())
@@ -56,20 +57,9 @@ plots <- lapply(names(pollutants), function(var) {
     ## pairs - beyond that the brackets overlap and become unreadable (full
     ## pairwise results, capped or not, are always in the CSV).
     sig_pairs <- pairwise_results |>
-        filter(pollutant == var, p.adj < 0.05) |>
-        arrange(p.adj) |>
-        slice_head(n = 6) |>
-        mutate(
-            group1 = as.character(group1),
-            group2 = as.character(group2),
-            y.position = max_val + step * row_number(),
-            p.adj.label = case_when(
-                p.adj < 0.0001 ~ "****",
-                p.adj < 0.001  ~ "***",
-                p.adj < 0.01   ~ "**",
-                TRUE           ~ "*"
-            )
-        )
+        filter(pollutant == var) |>
+        mutate(max_val = max_val, min_val = min_val) |>
+        prepare_significance_brackets(spacing = 0.12, max_pairs = 6)
     n_brackets <- nrow(sig_pairs)
     kruskal_y <- max_val + step * (n_brackets + 1.5)
 

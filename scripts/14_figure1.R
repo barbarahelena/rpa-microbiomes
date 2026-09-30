@@ -28,41 +28,23 @@ library(sf)
 
 ## Functions
 source(here::here("scripts", "lib", "plot_style.R"))
+source(here::here("scripts", "lib", "diversity_plots.R"))
+source(here::here("scripts", "lib", "plot_annotations.R"))
 
 ## PCoA ordination panel (points + 95% ellipses, centroids when >3 groups,
 ## PERMANOVA R2/p annotation) - shared by the main figure's Weighted UniFrac
 ## panels and the Bray-Curtis supplement.
 build_pcoa_panel <- function(meta, pcoa, block, dist_name, site_name, eth_colours) {
-    eig <- pcoa$values$Eigenvalues
-    var_explained <- round(100 * eig / sum(eig), 1)
-
-    ord_df <- data.frame(
-        PCo1 = pcoa$vectors[, 1],
-        PCo2 = pcoa$vectors[, 2],
-        EthnicityTotal = meta$EthnicityTotal
-    )
+    prepared <- prepare_pcoa_plot_data(meta, pcoa)
+    var_explained <- prepared$var_explained
+    n_groups <- prepared$n_groups
 
     permanova_label <- paste0(
         "R² = ", round(block$permanova_eth$R2[1], 3),
         ", p = ", format.pval(block$permanova_eth[["Pr(>F)"]][1], digits = 2, eps = 0.001)
     )
 
-    n_groups <- nlevels(droplevels(meta$EthnicityTotal))
-
-    p <- ggplot(ord_df, aes(x = PCo1, y = PCo2, colour = EthnicityTotal)) +
-        geom_point(alpha = 0.5, size = 1) +
-        stat_ellipse(level = 0.95, linewidth = 0.8)
-
-    if (n_groups > 3) {
-        centroids <- ord_df |>
-            group_by(EthnicityTotal) |>
-            summarise(PCo1 = mean(PCo1), PCo2 = mean(PCo2), .groups = "drop")
-        p <- p +
-            geom_point(data = centroids,
-                       aes(x = PCo1, y = PCo2, fill = EthnicityTotal),
-                       shape = 21, colour = "black", size = 4, stroke = 0.8) +
-            scale_fill_manual(values = eth_colours, guide = "none")
-    }
+    p <- plot_ethnicity_pcoa(prepared$ord_df, n_groups, eth_colours)
 
     ## PERMANOVA R2/p goes in the subtitle (above the plot area) rather
     ## than as an in-plot annotation, so it doesn't sit on top of points
@@ -174,25 +156,10 @@ build_pollution_panel <- function(spec, meta, eth_colours) {
     pw <- exposure_cache$figure_tests[[spec$col]]$pw
     max_val <- max(df$value)
     min_val <- min(df$value)
-    step <- (max_val - min_val) * 0.08
 
-    sig_pairs <- as.data.frame(as.table(pw$p.value)) |>
-        filter(!is.na(Freq)) |>
-        dplyr::rename(group1 = Var1, group2 = Var2, p.adj = Freq) |>
-        filter(p.adj < 0.05) |>
-        arrange(p.adj) |>
-        slice_head(n = 6) |>
-        mutate(
-            group1 = as.character(group1),
-            group2 = as.character(group2),
-            y.position = max_val + step * row_number(),
-            p.adj.label = case_when(
-                p.adj < 0.0001 ~ "****",
-                p.adj < 0.001  ~ "***",
-                p.adj < 0.01   ~ "**",
-                TRUE           ~ "*"
-            )
-        )
+    sig_pairs <- tidy_pairwise_pvalues(pw$p.value) |>
+        mutate(max_val = max_val, min_val = min_val) |>
+        prepare_significance_brackets(spacing = 0.08, max_pairs = 6)
 
     p <- ggplot(df, aes(x = EthnicityTotal, y = value, fill = EthnicityTotal)) +
         geom_boxplot(outlier.shape = 21, outlier.size = 0.8, alpha = 0.7) +
@@ -219,22 +186,13 @@ pollution_panels <- lapply(pollution_specs, build_pollution_panel,
                             meta = pollution_meta, eth_colours = eth_colours)
 
 ## ---- Panels I/J: sampling seasonality density plots (nose/throat) ----
-## Day-of-year for the 1st of each month (non-leap reference year), used as
-## x-axis gridlines/labels so the plot reads by calendar month
-month_starts <- yday(as.Date(paste0("2001-", 1:12, "-01")))
-
 build_density_panel <- function(site_name, eth_colours) {
     cache_path <- paste0("results/sample_metadata/cache/seasonality_16s_", site_name, ".rds")
     if (!file.exists(cache_path)) stop("Missing cache: ", cache_path, "; run pixi run sample-characteristics first.")
     season_cache <- readRDS(cache_path)
     date_df <- season_cache$date_df
 
-    ggplot(date_df, aes(x = yday, colour = EthnicityTotal, fill = EthnicityTotal)) +
-        geom_density(alpha = 0.15, linewidth = 0.8) +
-        scale_colour_manual(values = eth_colours) +
-        scale_fill_manual(values = eth_colours) +
-        scale_x_continuous(breaks = month_starts, labels = month.abb,
-                            limits = c(1, 366), expand = c(0, 0)) +
+    plot_sampling_seasonality(date_df, eth_colours) +
         labs(x = "Collection month", y = "Density",
              title = paste0("Sampling season - ", site_name)) +
         theme_Publication() +
@@ -265,24 +223,10 @@ for (site_name in sites) {
     pw <- alpha_cache$figure_tests$pw
     max_val <- max(alpha_df$Shannon)
     min_val <- min(alpha_df$Shannon)
-    step <- (max_val - min_val) * 0.06
 
-    sig_pairs <- as.data.frame(as.table(pw$p.value)) |>
-        filter(!is.na(Freq)) |>
-        dplyr::rename(group1 = Var1, group2 = Var2, p.adj = Freq) |>
-        filter(p.adj < 0.05) |>
-        arrange(p.adj) |>
-        mutate(
-            group1 = as.character(group1),
-            group2 = as.character(group2),
-            y.position = max_val + step * row_number(),
-            p.adj.label = case_when(
-                p.adj < 0.0001 ~ "****",
-                p.adj < 0.001  ~ "***",
-                p.adj < 0.01   ~ "**",
-                TRUE           ~ "*"
-            )
-        )
+    sig_pairs <- tidy_pairwise_pvalues(pw$p.value) |>
+        mutate(max_val = max_val, min_val = min_val) |>
+        prepare_significance_brackets(spacing = 0.06)
 
     p_shannon <- ggplot(alpha_df, aes(x = EthnicityTotal, y = Shannon,
                                        fill = EthnicityTotal)) +

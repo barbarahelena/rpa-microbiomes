@@ -12,6 +12,7 @@ library(ggpubr)
 
 ## Functions
 source(here::here("scripts", "lib", "plot_style.R"))
+source(here::here("scripts", "lib", "plot_annotations.R"))
 
 ## Setup
 setwd(here::here())
@@ -61,22 +62,9 @@ for (site_name in c("throat", "nose")) {
         summarise(max_val = max(value), min_val = min(value), .groups = "drop")
 
     sig_pairs <- pairwise_results |>
-        filter(p.adj < 0.05) |>
         left_join(metric_range, by = "metric") |>
         group_by(metric) |>
-        arrange(p.adj) |>
-        mutate(
-            group1 = as.character(group1),
-            group2 = as.character(group2),
-            step = (max_val - min_val) * 0.06,
-            y.position = max_val + step * row_number(),
-            p.adj.label = case_when(
-                p.adj < 0.0001 ~ "****",
-                p.adj < 0.001  ~ "***",
-                p.adj < 0.01   ~ "**",
-                TRUE           ~ "*"
-            )
-        ) |>
+        prepare_significance_brackets(spacing = 0.06) |>
         ungroup()
 
     ## Original ggpubr label position: top of the trained panel scale,

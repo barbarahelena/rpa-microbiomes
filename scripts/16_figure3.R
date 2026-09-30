@@ -26,6 +26,7 @@ library(ggthemes)
 
 ## Functions
 source(here::here("scripts", "lib", "plot_style.R"))
+source(here::here("scripts", "lib", "abundance.R"))
 
 ## Shorten covariate names for plot subtitles (drop trailing _FU/_BA suffix)
 ## and wrap long lists onto multiple lines instead of running off the page.
@@ -100,15 +101,9 @@ build_volcano <- function(diffab_dir, site_name, group1, group2,
             sig = case_when(
                 qval < 0.05 ~ "q < 0.05",
                 TRUE ~ "NS"
-            ),
-            label = case_when(
-                !is.na(Tax) & Tax != "" ~ Tax,
-                TRUE ~ feature
             )
         ) |>
-        group_by(label) |>
-        mutate(label = if (n() > 1) paste0(label, " (", feature, ")") else label) |>
-        ungroup()
+        make_taxon_labels()
 
     volcano_colours <- c("q < 0.05" = "#E31A1C", "NS" = "grey60")
 

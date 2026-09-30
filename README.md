@@ -54,8 +54,13 @@ parts that do not apply. In the table, `{compute,report}` means two files.
   panel layouts. Figure 1 uses exposure, seasonality, alpha-diversity, geometry
   and beta-diversity caches; Figures 2 and 3 use beta-diversity caches and ASV
   result tables respectively.
-- `scripts/lib/plot_style.R` holds the shared publication theme and ethnicity
-  palette. Shotgun plots retain their existing palette subset.
+- `scripts/lib/` holds reusable functions. `plot_style.R` defines the publication
+  theme and ethnicity palette; `plot_annotations.R` prepares significance
+  brackets; `abundance.R` prepares taxon labels and relative-abundance plotting
+  tables; `diversity_plots.R` shares PCoA and seasonality plot construction.
+  Reports and figures keep their own thresholds, titles, legends and layouts.
+  Shared helpers consume saved results without fitting models. Shotgun plots
+  retain their existing palette subset.
 
 Existing result paths and public Pixi task names are retained. Analysis entry
 points now run their compute/report dependency chain. For example:

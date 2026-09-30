@@ -12,6 +12,7 @@ library(phyloseq)
 
 ## Functions
 source(here::here("scripts", "lib", "plot_style.R"))
+source(here::here("scripts", "lib", "diversity_plots.R"))
 
 ## Setup
 setwd(here::here())
@@ -22,10 +23,6 @@ dir.create("results/sample_metadata", recursive = TRUE, showWarnings = FALSE)
 eth_colours <- ethnicity_colours
 
 ## ---- Seasonality of swab collection by ethnicity ----
-## Day-of-year for the 1st of each month (non-leap reference year), used as
-## x-axis gridlines/labels so the plot reads by calendar month
-month_starts <- yday(as.Date(paste0("2001-", 1:12, "-01")))
-
 ## ---- Load cleaned 16S samples for both sites ----
 ## Unrarefied, QC'd phyloseq objects (post decontam/dedup, pre rarefaction) -
 ## rarefaction-driven sample dropout isn't relevant to a sampling-date check
@@ -64,12 +61,7 @@ for (site_name in names(sites)) {
               paste0("results/sample_metadata/season_by_ethnicity_16s_", site_name, "_counts.csv"))
 
     ## Density plot: day-of-year sampling distribution by ethnicity
-    p <- ggplot(date_df, aes(x = yday, colour = EthnicityTotal, fill = EthnicityTotal)) +
-        geom_density(alpha = 0.15, linewidth = 0.8) +
-        scale_colour_manual(values = eth_colours, name = "Ethnicity") +
-        scale_fill_manual(values = eth_colours, name = "Ethnicity") +
-        scale_x_continuous(breaks = month_starts, labels = month.abb,
-                            limits = c(1, 366), expand = c(0, 0)) +
+    p <- plot_sampling_seasonality(date_df, eth_colours, legend_title = "Ethnicity") +
         labs(title = paste0("Sampling seasonality by ethnicity - 16S ", site_name),
              x = "Collection month", y = "Density") +
         theme_Publication() +

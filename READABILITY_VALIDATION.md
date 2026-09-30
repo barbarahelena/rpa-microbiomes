@@ -3,6 +3,26 @@
 Baseline: `3704c99ef3b9018e88219d9b272f5a86bab6a536`.
 Updated: 2026-09-29. The full pipeline is intentionally left for the user to run.
 
+## Shared plotting helpers (2026-09-30)
+
+Eight plotting/preparation helpers were extracted into `scripts/lib/` and
+wired into eight report/figure scripts. Their Pixi tasks declare the new
+helper files as inputs. Compute scripts and saved analysis schemas are unchanged.
+
+An isolated comparison against the pre-extraction scripts regenerated the
+participant-exposure, sample-characteristics, 16S alpha-diversity and ethnicity
+beta-diversity reports, plus Figure 1 and its supplements, using existing inputs
+and caches. All 155 CSV/PDF/PNG outputs matched exactly, ignoring PDF date
+metadata only. Outputs were written under `/tmp`, not over publication results.
+This validates reporting equivalence, not a fresh full-pipeline computation.
+
+`tests/shared_plot_helpers.R` adds synthetic checks for bracket thresholds,
+per-facet positioning and caps, empty comparisons, taxon-label fallback and
+collisions, single-taxon matrix dimensions, metadata/sample alignment, both
+OTU-table orientations, and the three/four-group PCoA centroid boundary. It runs
+as part of `python3 tests/run_readability_checks.py`. The shared abundance helper
+also preserves metadata dimensions when only the ethnicity column is supplied.
+
 ## Current bounded checks
 
 Run from the repository root with Python 3.11+ and the existing Pixi environment installed:
