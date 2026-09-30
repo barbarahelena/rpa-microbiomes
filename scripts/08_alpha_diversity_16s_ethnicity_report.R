@@ -1,6 +1,7 @@
-## Alpha diversity analysis: 16S microbiome (throat and nose)
-## Stratified by ethnicity (all groups with N > 50 per site)
-## with Kruskal-Wallis (+ pairwise Wilcoxon) and covariate-adjusted regression
+## Report 16S alpha diversity by ethnicity (throat and nose; groups N > 50).
+## 1. Load diversity values and test results from the matching computation cache.
+## 2. Export summary statistics, group tests, and adjusted regression tables.
+## 3. Save ethnicity boxplots with cached tests and violin plots by ethnicity.
 
 ## Libraries
 library(here)
@@ -21,6 +22,7 @@ dir.create("results/alpha_diversity", recursive = TRUE, showWarnings = FALSE)
 eth_colours <- ethnicity_colours
 
 for (site_name in c("throat", "nose")) {
+    ## ---- Load cached diversity values and results for this site ----
     cache_path <- paste0("results/alpha_diversity/cache/alpha_16s_", site_name, ".rds")
     if (!file.exists(cache_path)) stop("Missing cache: ", cache_path, "; run pixi run alpha-16s-compute first.")
     cache <- readRDS(cache_path)
@@ -35,6 +37,7 @@ for (site_name in c("throat", "nose")) {
     kruskal_annotations <- cache$kruskal_annotations
     figure_tests <- cache$figure_tests
 
+    ## ---- Export summary statistics and test results ----
     write_csv(summary_table,
               paste0("results/alpha_diversity/alpha_diversity_summary_16s_",
                      site_name, "_ethnicity.csv"))

@@ -1,6 +1,7 @@
 ## Exercise the original and split reporting boundaries with fixed model outputs.
 ## Model fitting is stubbed deliberately: these checks test wiring and RNG order,
 ## not scientific inference. Every output stays inside the test sandbox.
+## ---- Select the baseline/current script and test scenario ----
 args <- commandArgs(TRUE)
 version <- args[1]
 level <- args[2]
@@ -20,6 +21,7 @@ if (version == "before") {
                                 "scripts/13_differential_abundance_16s_genus_ethnicity_compute.R"
 }
 load_before_sites(path)
+## ---- Stub model fitting with fixed outputs ----
 Maaslin2 <- function(input_data, input_metadata, output, fixed_effects, reference, ...) {
     dir.create(output, recursive = TRUE, showWarnings = FALSE)
     saveRDS(list(counts = input_data, metadata = input_metadata,
@@ -35,6 +37,7 @@ Maaslin2 <- function(input_data, input_metadata, output, fixed_effects, referenc
     readr::write_tsv(results, file.path(output, "all_results.tsv"))
     invisible(NULL)
 }
+## ---- Prepare the synthetic cohort and run a pairwise analysis ----
 ps <- readRDS("data/processed/ps_throat_rarefied.RDS")
 ps <- prune_samples(sample_data(ps)$EthnicityTotal %in% c("Turkish", "Moroccan"), ps)
 meta <- as(sample_data(ps), "data.frame")
@@ -46,6 +49,7 @@ result <- if (level == "asv") {
 } else {
     run_da_pair(ps, "throat", "Turkish", "Moroccan", character(), outdir)
 }
+## ---- Save comparison outputs and exercise the split report ----
 saveRDS(.Random.seed, "compute_rng.rds")
 if (version == "before") {
     saveRDS(result, "summary.rds")

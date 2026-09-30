@@ -123,6 +123,7 @@ legend_source <- NULL
 caches <- list()
 
 for (site_name in sites) {
+    ## ---- Load cached beta-diversity results for this site ----
     cache_path <- file.path(beta_outdir, "cache", paste0("beta_diversity_16s_", site_name, ".rds"))
     if (!file.exists(cache_path)) {
         stop("No beta diversity cache for '", site_name, "' at ", cache_path,

@@ -1,4 +1,10 @@
-## Data cleaning of microbiome data
+## Clean 16S and shotgun microbiome data and link clinical metadata.
+## 1. Add sampling season/batch; remove unsuitable ASVs, contaminants,
+##    negative controls, and duplicate 16S samples; tidy taxonomy labels.
+## 2. Split nose/throat samples, plot rarefaction curves, and rarefy counts.
+## 3. Link HELIUS metadata and save both unrarefied and rarefied 16S objects.
+## 4. Merge MetaPhlAn batches and save shotgun taxonomy, abundance matrices,
+##    and metadata-linked throat/tongue objects to data/processed.
 
 ## Libraries
 library(phyloseq)
@@ -16,7 +22,7 @@ setwd(here::here())
 dir.create("data/processed", recursive = TRUE, showWarnings = FALSE)
 dir.create("results/rarefaction", recursive = TRUE, showWarnings = FALSE)
 
-# 16S dataset
+## ---- Load and clean 16S samples and taxonomy ----
 meta <- rio::import("data/raw/sample_sheet_withmeta.csv")
 names(meta)
 meta$sample <- str_c("S", meta$sample)
@@ -132,7 +138,7 @@ tax$Tax <- ifelse(!is.na(tax$Genus)   & !is.na(tax$Species), paste(tax$Genus, ta
 tax$ASV <- rownames(tax)
 tax_table(psnoneg) <- as.matrix(tax)
 
-# Identify throat and nose samples
+## ---- Split 16S samples by site and assess rarefaction ----
 throat_samples <- sample_names(psnoneg)[str_detect(sample_names(psnoneg), "Throat")]
 nose_samples <- sample_names(psnoneg)[str_detect(sample_names(psnoneg), "Nose")]
 
@@ -265,7 +271,7 @@ ps_throat_rarefied # 1626 taxa and 2390 samples
 sample_names(ps_nose_rarefied)
 sample_names(ps_throat_rarefied)
 
-# Link 16S samples to HELIUS clinical metadata via ID offset
+## ---- Link HELIUS metadata and save 16S objects ----
 # Ext_ID (6-digit) + 1900253 = HELIUS internal ID (7-digit)
 helius_meta <- readRDS("data/processed/HELIUSmetadata_clean.RDS")
 
@@ -295,7 +301,7 @@ saveRDS(ps_nose, "data/processed/ps_nose.RDS")
 saveRDS(ps_throat_rarefied, "data/processed/ps_throat_rarefied.RDS")
 saveRDS(ps_nose_rarefied, "data/processed/ps_nose_rarefied.RDS")
 
-# Metagenomics: merge batches
+## ---- Merge shotgun batches and save metadata-linked objects ----
 batch1 <- rio::import("data/raw/combined_table.txt")
 dim(batch1) # 3 samples in the last batch (broken fastqs)
 batch2 <- rio::import("data/raw/combined_table2.txt")

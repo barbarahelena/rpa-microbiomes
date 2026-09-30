@@ -1,5 +1,8 @@
-## Alpha diversity analysis: shotgun metagenomics (tongue and throat)
-## Stratified by ethnicity with linear regression
+## Compute shotgun alpha diversity by ethnicity (tongue and throat).
+## 1. Load MetaPhlAn abundances and calculate observed richness and Shannon diversity.
+## 2. Join clinical metadata, summarise by ethnicity, and fit covariate-adjusted
+##    linear regressions.
+## 3. Cache diversity values, summaries, and regression results for the report.
 
 ## Libraries
 library(here)
@@ -56,7 +59,7 @@ run_regression <- function(df, metric, covariates) {
         mutate(metric = metric, .before = 1)
 }
 
-## ---- Analysis loop over sites ----
+## ---- Load data and calculate alpha diversity for each site ----
 sites <- list(
     throat = readRDS("data/processed/shotgun_throat.RDS"),
     tongue = readRDS("data/processed/shotgun_tongue.RDS")
@@ -104,6 +107,7 @@ for (site_name in names(sites)) {
         run_regression(alpha_df, "Observed", covariates),
         run_regression(alpha_df, "Shannon", covariates)
     )
+    ## ---- Cache diversity values, summaries, and test results ----
     dir.create("results/alpha_diversity/cache", recursive = TRUE, showWarnings = FALSE)
     saveRDS(list(alpha_df = alpha_df,
             alpha_long = alpha_long,

@@ -1,5 +1,8 @@
-
-## Data cleaning of air pollution data
+## Prepare Amsterdam postcode geometries and air-pollution estimates.
+## 1. Select postcode polygons intersecting Amsterdam and join exposure data.
+## 2. Treat zero estimates as missing, simplify/repair geometries, and remove
+##    polygons with implausible extents.
+## 3. Calculate multi-year pollutant means and cache WGS84 map inputs.
 
 ## Libraries
 library(here)
@@ -12,7 +15,7 @@ library(htmltools)
 setwd(here::here())
 dir.create("results/airpollution", recursive = TRUE, showWarnings = FALSE)
 
-# Data
+## ---- Load exposures and select Amsterdam postcode polygons ----
 pc6 <- read.csv("data/raw/PC6_2022_ALO_2013_2015.csv")
 
 ## Map of Amsterdam air pollution by PC6 postcode
@@ -33,6 +36,7 @@ pc6_geo <- st_read(
 
 pc6_geo <- pc6_geo[st_intersects(pc6_geo, amsterdam_boundary, sparse = FALSE)[, 1], ]
 
+## ---- Join exposures and clean estimates and geometries ----
 pc6_amsterdam <- pc6_geo |>
   select(postcode6, geom) |>
   left_join(pc6, by = "postcode6") |>
@@ -68,6 +72,7 @@ if (any(is_corrupted)) {
 }
 pc6_amsterdam <- pc6_amsterdam[!is_corrupted, ]
 
+## ---- Calculate multi-year pollutant means ----
 pc6_amsterdam <- pc6_amsterdam |>
   mutate(
     pm10_avg_2013_2015 = rowMeans(
@@ -91,6 +96,7 @@ pc6_amsterdam <- pc6_amsterdam |>
 
 amsterdam_boundary_wgs84 <- st_transform(amsterdam_boundary, 4326)
 
+## ---- Cache map inputs for reports and Figure 1 ----
 ## Cache the processed geometries (PC6 polygons + Amsterdam boundary, WGS84)
 ## so downstream scripts (Figure 1) can build a small static map panel
 ## without repeating this spatial read/join.

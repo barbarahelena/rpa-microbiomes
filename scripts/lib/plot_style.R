@@ -1,5 +1,8 @@
-## Shared publication theme and ethnicity palette.
+## Shared plotting helpers, sourced by reports and figure scripts.
+## Define the publication theme, a consistent ethnicity colour palette,
+## and a plot layer for displaying already-computed p-values.
 
+## ---- Define the shared publication theme ----
 theme_Publication <- function(base_size=14, base_family="sans") {
     library(grid)
     library(ggthemes)
@@ -31,6 +34,7 @@ theme_Publication <- function(base_size=14, base_family="sans") {
         ))
 }
 
+## ---- Define consistent ethnicity colours ----
 ethnicity_colours <- c(
     "Dutch"                  = "#1F78B4",
     "South-Asian Surinamese" = "#E31A1C",
@@ -42,6 +46,7 @@ ethnicity_colours <- c(
     "Moroccan"               = "#D4AC0D"
 )
 
+## ---- Define the cached p-value annotation layer ----
 ## Draw an already-computed p-value at the original ggpubr panel position.
 ## Positioning happens after scale training, so annotations do not change
 ## the data range used to determine significance-bracket tip lengths.

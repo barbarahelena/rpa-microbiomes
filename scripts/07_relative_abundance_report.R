@@ -1,6 +1,8 @@
-## Descriptive composition plots: stacked bar plots of relative abundance
-## 16S: overall composition across participants
-## Shotgun: split by ethnicity (Dutch vs South-Asian Surinamese)
+## Describe microbiome composition with stacked relative-abundance bars.
+## 1. Load rarefied nose/throat 16S and throat/tongue shotgun data.
+## 2. Summarise phylum, family, and genus abundances; group minor taxa as Other.
+## 3. Save 16S plots by site and shotgun plots by ethnicity
+##    (Dutch vs South-Asian Surinamese).
 
 ## Libraries
 library(here)
@@ -10,7 +12,7 @@ library(phyloseq)
 ## Functions
 source(here::here("scripts", "lib", "plot_style.R"))
 
-# Helper: summarise mean relative abundance, keep top_n taxa, lump rest as "Other"
+## ---- Helper: summarise relative abundance and group minor taxa as Other ----
 # df must have columns: sample_id, Abundance, and the tax_rank column
 prep_abundance <- function(df, tax_rank, top_n, group_col = NULL) {
   df <- df |> mutate(taxon = replace_na(.data[[tax_rank]], "Unclassified"))
@@ -87,7 +89,7 @@ df_16s <- bind_rows(
   process_16s(ps_throat, "Throat")
 )
 
-# Phylum-level plot
+## ---- Summarise and plot 16S phylum composition ----
 df_16s_phylum <- prep_abundance(df_16s, "Phylum", top_n = 10, group_col = "site")
 
 n_taxa <- length(levels(df_16s_phylum$taxon))
@@ -108,7 +110,7 @@ ggplot(df_16s_phylum, aes(x = site, y = mean_abund, fill = taxon)) +
   guides(fill = guide_legend(ncol = 2))
 ggsave("results/composition/16s_phylum_composition.pdf", width = 6, height = 6)
 
-# Family-level plot
+## ---- Summarise and plot 16S family composition ----
 df_16s_family <- prep_abundance(df_16s, "Family", top_n = 12, group_col = "site")
 
 n_taxa_f <- length(levels(df_16s_family$taxon))
@@ -129,7 +131,7 @@ ggplot(df_16s_family, aes(x = site, y = mean_abund, fill = taxon)) +
   guides(fill = guide_legend(ncol = 2))
 ggsave("results/composition/16s_family_composition.pdf", width = 7, height = 7)
 
-# Genus-level plot
+## ---- Summarise and plot 16S genus composition ----
 df_16s_genus <- prep_abundance(df_16s, "Genus", top_n = 15, group_col = "site")
 
 n_taxa_g <- length(levels(df_16s_genus$taxon))

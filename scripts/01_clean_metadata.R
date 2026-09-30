@@ -1,4 +1,8 @@
-## Data cleaning of clinical data
+## Clean HELIUS clinical metadata for the microbiome analyses.
+## 1. Import the SPSS data and export a raw variable overview.
+## 2. Select and rename variables, recode categories, and standardise sample IDs.
+## 3. Link participant air-pollution estimates and calculate multi-year means.
+## 4. Save the cleaned metadata to data/processed.
 
 ## Libraries
 library(tidyverse)
@@ -29,7 +33,7 @@ setwd(here::here())
 dir.create("data/processed", recursive = TRUE, showWarnings = FALSE)
 dir.create("results/tableone", recursive = TRUE, showWarnings = FALSE)
 
-## HELIUS data
+## ---- Import clinical data and export the raw variable overview ----
 meta <- haven::read_sav("data/raw/250606_HELIUS data Barbara Verhaar.sav")
 names(meta)
 
@@ -40,6 +44,7 @@ str_lines_raw <- unlist(lapply(names(meta), function(v) {
 }))
 writeLines(str_lines_raw, "results/tableone/meta_raw_str.txt")
 
+## ---- Select, rename, and recode clinical variables ----
 df_new <- meta |> 
     dplyr::select(
                   # IDs and sample identifiers
@@ -357,7 +362,7 @@ df_new2 <- df_new |>
 
 dim(df_new2)
 
-## Air pollution exposure (RIVM Atlas Leefomgeving, via Gecco data request 2401)
+## ---- Link air-pollution exposure and calculate multi-year means ----
 ## Linked via Heliusnr + 1900253 = HELIUS ID - the same offset used for Ext_ID
 ## in 02_clean_microbiome.R to link 16S samples to this clinical metadata.
 airpol_raw <- haven::read_sav("data/raw/231108b_HELIUS data Barbara Verhaar_GECCO.sav")
@@ -385,5 +390,6 @@ airpol <- airpol_raw |>
 df_new2 <- left_join(df_new2, airpol, by = "ID")
 cat("Air pollution data matched:", sum(!is.na(df_new2$PM25_mean)), "/", nrow(df_new2), "\n")
 
+## ---- Save cleaned clinical metadata ----
 saveRDS(df_new2, "data/processed/HELIUSmetadata_clean.RDS")
   

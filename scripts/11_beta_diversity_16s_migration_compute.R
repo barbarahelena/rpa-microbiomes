@@ -1,15 +1,11 @@
-## Beta diversity analysis: 16S microbiome (throat and nose)
-## All non-Dutch ethnicity groups with N > 50, pooled (Dutch has no
-## migration/acculturation data - see below)
-## Screening migration/acculturation covariates (structurally NA for Dutch
-## participants, so not usable in the ethnicity-comparison scripts)
-## with PERMANOVA, covariate screening, and betadisper
-## Primary grouping variable: MigrationGen (1st vs 2nd generation).
-## Ethnicity is forced into every model as a covariate (entered before
-## MigrationGen, so its variance is partialled out first): pooling several
-## ethnic groups means their generation composition differs (e.g. Ghanaian
-## is almost entirely 1st generation, n=2 2nd-gen), so without adjustment
-## an apparent "generation" effect could really just be an ethnicity effect.
+## Compute 16S beta diversity by migration generation (throat and nose).
+## 1. Pool non-Dutch ethnicities with N > 50 from rarefied data; Dutch participants
+##    lack migration/acculturation data.
+## 2. Calculate Bray-Curtis/weighted UniFrac distances and PCoA ordinations.
+## 3. Test migration generation, screen covariates, fit adjusted PERMANOVA,
+##    and test dispersion; ethnicity enters first in every PERMANOVA model
+##    to account for differing generation composition across ethnic groups.
+## 4. Cache ordinations and test results for the matching report.
 
 ## Libraries
 library(here)
@@ -45,7 +41,7 @@ covariates <- c(
     "CultDistMeanScore0_BA", "DiscrMean_BA"
 )
 
-## ---- Analysis loop over sites ----
+## ---- Load rarefied data and select non-Dutch ethnicity groups ----
 sites <- list(
     throat = readRDS("data/processed/ps_throat_rarefied.RDS"),
     nose   = readRDS("data/processed/ps_nose_rarefied.RDS")
@@ -187,6 +183,7 @@ for (site_name in names(sites)) {
         betadisp <- betadisper(dist_mat, meta$MigrationGen)
         betadisp_test <- permutest(betadisp, permutations = 999)
 
+        ## ---- Cache ordinations and test results ----
         saveRDS(list(meta = meta,
                 n_samples = n_samples,
                 subtitle_text = subtitle_text,

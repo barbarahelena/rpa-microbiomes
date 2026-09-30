@@ -1,4 +1,8 @@
-## Compare expressions, ignoring whitespace/comments, against the Git baseline.
+## Check that the refactor preserves R expressions against the Git baseline.
+## Parse baseline/current scripts, ignoring comments and whitespace;
+## compare cleaning code and shared/analysis functions, allowing the theme extraction.
+
+## ---- Define parsers and extract functions for comparison ----
 original <- function(name) parse(file.path("baseline", name))
 current <- function(name) parse(file.path("scripts", name))
 functions <- function(expressions) {
@@ -10,6 +14,7 @@ functions <- function(expressions) {
     }
     result
 }
+## ---- Compare cleaning code, the extracted theme, and beta-diversity code ----
 stopifnot(identical(original("1a_datacleaning_helius.R"), current("01_clean_metadata.R")))
 a <- original("1b_datacleaning_biome.R")
 b <- current("02_clean_microbiome.R")
@@ -19,6 +24,7 @@ is_source <- function(e) is.call(e) && identical(e[[1]], as.name("source"))
 stopifnot(identical(a[!vapply(a, is_theme, logical(1))], b[!vapply(b, is_source, logical(1))]))
 stopifnot(identical(functions(a)$theme_Publication, functions(current("lib/plot_style.R"))$theme_Publication))
 stopifnot(identical(original("7a_beta_diversity_16s_compute.R"), current("10_beta_diversity_16s_ethnicity_compute.R")))
+## ---- Compare analysis functions across the compute/report split ----
 pairs <- list(
     c("6_alpha_diversity_16s_ethnicity.R", "08_alpha_diversity_16s_ethnicity_compute.R"),
     c("11_alpha_diversity_shotgun.R", "09_alpha_diversity_shotgun_ethnicity_compute.R"),

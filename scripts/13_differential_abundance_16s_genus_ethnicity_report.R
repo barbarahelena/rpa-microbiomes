@@ -317,9 +317,11 @@ report_da_pair <- function(cache, outdir) {
 
 }
 
+## ---- Load the matching differential-abundance computation cache ----
 cache_path <- file.path(outdir, "cache", "da_genus.rds")
 if (!file.exists(cache_path)) stop("Missing cache: ", cache_path, "; run pixi run diffabund-16s-genus-compute first.")
 cache <- readRDS(cache_path)
+## ---- Export confounder assessments and model summaries ----
 for (site_name in names(cache$confounders)) {
     confounder_results <- cache$confounders[[site_name]]
     write_csv(confounder_results,
@@ -329,4 +331,5 @@ for (site_name in names(cache$confounders)) {
 }
 write_csv(cache$summary, file.path(outdir, "summary_pairs_16s.csv"))
 write_csv(cache$agglomeration_summary, file.path(outdir, "agglomeration_summary_16s.csv"))
+## ---- Export ethnicity-effect tables and plots for each pair ----
 for (pair_cache in cache$pairs) report_da_pair(pair_cache, outdir)

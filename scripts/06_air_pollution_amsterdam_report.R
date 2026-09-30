@@ -1,4 +1,7 @@
 ## Report Amsterdam-wide air-pollution maps.
+## 1. Load postcode exposures and boundaries from the preparation cache.
+## 2. Export static PDF/PNG maps for PM10, PM2.5, NO2, and soot/EC.
+## 3. Save an interactive HTML map with a pollutant selector.
 
 library(here)
 library(tidyverse)
@@ -10,12 +13,14 @@ library(htmltools)
 setwd(here::here())
 dir.create("results/airpollution", recursive = TRUE, showWarnings = FALSE)
 
+## ---- Load cached postcode exposures and boundaries ----
 cache_path <- "results/airpollution/amsterdam_pc6_geo.rds"
 if (!file.exists(cache_path)) stop("Missing cache: ", cache_path, "; run pixi run airpollution-amsterdam-prepare first.")
 cache <- readRDS(cache_path)
 pc6_amsterdam <- cache$pc6
 amsterdam_boundary_wgs84 <- cache$boundary
 
+## ---- Export static maps for each pollutant ----
 ## Static, non-interactive maps (one per pollutant, multi-year mean) -
 ## standalone sanity-check exports; the small Figure 1 panel is rebuilt from
 ## the cached geometries above (see 14_figure1.R) rather than
@@ -46,6 +51,7 @@ for (spec in static_map_specs) {
   ggsave(paste0("results/airpollution/amsterdam_", spec$file, "_static.png"), static_map, width = 6, height = 5, dpi = 300)
 }
 
+## ---- Build and save the interactive pollutant map ----
 pollutant_cols <- c(
   "PM10 2013" = "conc_ALO_pm10_2013", "PM10 2014" = "conc_ALO_pm10_2014", "PM10 2015" = "conc_ALO_pm10_2015",
   "PM10 avg 2013-2015" = "pm10_avg_2013_2015",

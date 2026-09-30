@@ -1,8 +1,12 @@
-## Small synthetic inputs for the structural-refactor checks. No cohort data.
+## Build small synthetic inputs for the structural-refactor checks (no cohort data).
+## Generate metadata, ASV counts, taxonomy, and trees with a fixed random seed;
+## save nose/throat phyloseq fixtures under data/processed in the test workspace.
+
 library(phyloseq)
 library(ape)
 set.seed(101)
 dir.create("data/processed", recursive = TRUE, showWarnings = FALSE)
+## ---- Generate synthetic metadata, counts, taxonomy, and trees ----
 for (site in c("throat", "nose")) {
     groups <- rep(c("Dutch", "Turkish", "Moroccan", "Ghanaian"), c(53, 51, 51, 12))
     n <- length(groups)
@@ -32,5 +36,6 @@ for (site in c("throat", "nose")) {
                       c("Kingdom", "Phylum", "Genus", "Tax", "ASV")))
     ps <- phyloseq(otu_table(counts, taxa_are_rows = TRUE), sample_data(meta),
                    tax_table(tax), phy_tree(tree))
+    ## ---- Save the synthetic phyloseq fixture for this site ----
     saveRDS(ps, paste0("data/processed/ps_", site, "_rarefied.RDS"))
 }

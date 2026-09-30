@@ -1,8 +1,8 @@
-## Beta diversity analysis: 16S microbiome (throat and nose) - REPORT STEP
-## Reads the .rds cache written by 10_beta_diversity_16s_ethnicity_compute.R and builds
-## every plot and table (PCoA, betadisper, PERMANOVA tables/heatmaps,
-## covariate screen, ethnicity attenuation) without repeating any permutation
-## test. Run 5a first (or via the beta-16s pixi task, which chains both).
+## Report 16S beta diversity by ethnicity (throat and nose).
+## 1. Load the cache from 10_beta_diversity_16s_ethnicity_compute.R
+##    (run pixi run beta-16s-compute first).
+## 2. Export PERMANOVA, dispersion, covariate-screening, and attenuation tables.
+## 3. Save PCoA/dispersion plots and effect-size heatmaps from the cached results.
 
 ## Libraries
 library(here)
@@ -192,6 +192,7 @@ plot_pcoa_by_covariate <- function(plot_df, cov, cov_label, stat_label,
 
 ## ---- Report loop over sites: throat and nose ----
 for (site_name in c("throat", "nose")) {
+    ## ---- Load the computation cache for this site ----
     cache_path <- file.path(outdir, "cache", paste0("beta_diversity_16s_", site_name, ".rds"))
     if (!file.exists(cache_path)) {
         stop("No cache for '", site_name, "' at ", cache_path,

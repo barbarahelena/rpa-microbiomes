@@ -1,15 +1,8 @@
-## Beta diversity analysis: 16S microbiome (throat and nose)
-## All non-Dutch ethnicity groups with N > 50, pooled (Dutch has no
-## migration/acculturation data - see below)
-## Screening migration/acculturation covariates (structurally NA for Dutch
-## participants, so not usable in the ethnicity-comparison scripts)
-## with PERMANOVA, covariate screening, and betadisper
-## Primary grouping variable: MigrationGen (1st vs 2nd generation).
-## Ethnicity is forced into every model as a covariate (entered before
-## MigrationGen, so its variance is partialled out first): pooling several
-## ethnic groups means their generation composition differs (e.g. Ghanaian
-## is almost entirely 1st generation, n=2 2nd-gen), so without adjustment
-## an apparent "generation" effect could really just be an ethnicity effect.
+## Report 16S beta diversity by migration generation (throat and nose).
+## 1. Load the matching computation caches for pooled non-Dutch ethnicities N > 50.
+## 2. Plot PCoA by generation, ethnicity, and significant covariates, plus dispersion.
+## 3. Export cached PERMANOVA, covariate-screening, and dispersion tests;
+##    PERMANOVA results account for ethnicity before migration generation.
 
 ## Libraries
 library(here)
@@ -34,6 +27,7 @@ eth_colours <- ethnicity_colours
 for (site_name in c("throat", "nose")) {
     for (dist_name in c("Bray-Curtis", "Weighted UniFrac")) {
         dist_label <- tolower(gsub("[- ]", "_", dist_name))
+        ## ---- Load cached ordinations and tests for this site/distance ----
         cache_path <- file.path("results/beta_diversity_migration/cache", paste0("migration_", site_name, "_", dist_label, ".rds"))
         if (!file.exists(cache_path)) stop("Missing cache: ", cache_path, "; run pixi run beta-16s-migration-compute first.")
         cache <- readRDS(cache_path)
@@ -49,7 +43,7 @@ for (site_name in c("throat", "nose")) {
         permanova_full <- cache$permanova_full
         betadisp <- cache$betadisp
         betadisp_test <- cache$betadisp_test
-        ## PCoA plot coloured by migration generation
+        ## ---- Plot PCoA by migration generation ----
         ggplot(ord_df, aes(x = PCo1, y = PCo2, colour = MigrationGen)) +
             geom_point(alpha = 0.5, size = 1) +
             stat_ellipse(level = 0.95, linewidth = 0.8) +
@@ -84,7 +78,7 @@ for (site_name in c("throat", "nose")) {
                       site_name, "_ethnicity.pdf"),
                width = 7, height = 8)
 
-        ## Betadisper boxplot
+        ## ---- Plot dispersion by migration generation ----
         disp_df <- data.frame(
             Distance = betadisp$distances,
             MigrationGen = meta$MigrationGen

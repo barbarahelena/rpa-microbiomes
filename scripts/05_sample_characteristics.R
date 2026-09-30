@@ -1,4 +1,7 @@
-## Sampling seasonality and sequencing-batch composition.
+## Describe sampling seasonality and sequencing-batch composition.
+## 1. Load unrarefied nose/throat 16S objects and retain ethnicities N > 50.
+## 2. Cache collection dates for Figure 1; export monthly counts and density plots.
+## 3. Export ethnicity counts and proportional bar plots by sequencing batch.
 
 ## Libraries
 library(here)
@@ -23,6 +26,7 @@ eth_colours <- ethnicity_colours
 ## x-axis gridlines/labels so the plot reads by calendar month
 month_starts <- yday(as.Date(paste0("2001-", 1:12, "-01")))
 
+## ---- Load cleaned 16S samples for both sites ----
 ## Unrarefied, QC'd phyloseq objects (post decontam/dedup, pre rarefaction) -
 ## rarefaction-driven sample dropout isn't relevant to a sampling-date check
 sites <- list(
@@ -44,6 +48,7 @@ for (site_name in names(sites)) {
                yday = yday(Collection_Date))
 
     dir.create("results/sample_metadata/cache", recursive = TRUE, showWarnings = FALSE)
+    ## ---- Cache collection dates for Figure 1 ----
     saveRDS(list(date_df = date_df),
             paste0("results/sample_metadata/cache/seasonality_16s_", site_name, ".rds"))
 

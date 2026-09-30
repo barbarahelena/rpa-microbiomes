@@ -1,4 +1,7 @@
 ## Report participant air-pollution exposure from saved tests.
+## 1. Load the matching participant-exposure computation cache.
+## 2. Plot pollutant histograms and ethnicity boxplots with saved test results.
+## 3. Export individual/combined PDFs and summary/pairwise-test CSV tables.
 
 ## Libraries
 library(here)
@@ -18,6 +21,7 @@ dir.create("results/sample_metadata", recursive = TRUE, showWarnings = FALSE)
 ## Shared ethnicity colours
 eth_colours <- ethnicity_colours
 
+## ---- Load cached participant exposures and test results ----
 cache_path <- "results/airpollution/cache/participant_exposure.rds"
 if (!file.exists(cache_path)) stop("Missing cache: ", cache_path, "; run pixi run airpollution-participants-compute first.")
 cache <- readRDS(cache_path)
@@ -28,8 +32,10 @@ summary_overall <- cache$summary_overall
 summary_by_eth <- cache$summary_by_eth
 kruskal_annotations <- cache$kruskal_annotations
 
+## ---- Export pairwise test results ----
 write_csv(pairwise_results, "results/airpollution/participants_pairwise_wilcoxon.csv")
 
+## ---- Build pollutant histograms and ethnicity boxplots ----
 ## One histogram + one ethnicity boxplot per pollutant
 ## Vertical headroom above the boxes (Kruskal-Wallis p-value + stacked
 ## pairwise brackets) is sized to the number of significant pairs found, via
@@ -92,6 +98,7 @@ plots <- lapply(names(pollutants), function(var) {
     ggarrange(hist, box, nrow = 1)
 })
 
+## ---- Export individual/combined plots and exposure summaries ----
 for (i in seq_along(pollutants)) {
     ggsave(
         paste0("results/airpollution/participants_", names(pollutants)[i], ".pdf"),

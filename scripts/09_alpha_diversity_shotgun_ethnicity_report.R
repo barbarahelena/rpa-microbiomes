@@ -1,5 +1,7 @@
-## Alpha diversity analysis: shotgun metagenomics (tongue and throat)
-## Stratified by ethnicity with linear regression
+## Report shotgun alpha diversity by ethnicity (tongue and throat).
+## 1. Load diversity values and results from the matching computation cache.
+## 2. Export summary statistics and adjusted regression tables.
+## 3. Save ethnicity boxplots and overall violin plots.
 
 ## Libraries
 library(here)
@@ -18,6 +20,7 @@ dir.create("results/alpha_diversity", recursive = TRUE, showWarnings = FALSE)
 eth_colours <- ethnicity_colours[c("Dutch", "South-Asian Surinamese")]
 
 for (site_name in c("throat", "tongue")) {
+    ## ---- Load cached diversity values and results for this site ----
     cache_path <- paste0("results/alpha_diversity/cache/alpha_shotgun_", site_name, ".rds")
     if (!file.exists(cache_path)) stop("Missing cache: ", cache_path, "; run pixi run alpha-shotgun-compute first.")
     cache <- readRDS(cache_path)
@@ -27,6 +30,7 @@ for (site_name in c("throat", "tongue")) {
     summary_table <- cache$summary_table
     reg_results <- cache$reg_results
 
+    ## ---- Export summary statistics and test results ----
     write_csv(summary_table,
               paste0("results/alpha_diversity/alpha_diversity_summary_shotgun_",
                      site_name, ".csv"))

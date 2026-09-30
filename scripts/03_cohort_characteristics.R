@@ -1,4 +1,7 @@
-# Table 1 HELIUS population
+## Describe the HELIUS microbiome cohorts (Table 1).
+## 1. Load cleaned metadata and export a variable overview.
+## 2. Select shotgun and rarefied throat 16S cohorts, keeping ethnicities N > 50.
+## 3. Export clinical characteristics by ethnicity as CSV tables.
 
 # Libraries
 library(here)
@@ -10,7 +13,7 @@ library(phyloseq)
 setwd(here::here())
 dir.create("results/tableone", recursive = TRUE, showWarnings = FALSE)
 
-# Data
+## ---- Load metadata and export the variable overview ----
 meta <- readRDS("data/processed/HELIUSmetadata_clean.RDS")
 dim(meta)
 
@@ -29,7 +32,7 @@ drop_small_groups <- function(data, min_n = 50) {
     droplevels()
 }
 
-# Shotgun subset
+## ---- Select the shotgun cohort and ethnicity groups ----
 tonguemeta <- meta |> filter(!is.na(TongueSampleID)) |> droplevels() |> drop_small_groups()
 throatmeta <- meta |> filter(!is.na(ThroatSampleID)) |> droplevels() |> drop_small_groups()
 all(tonguemeta$ID %in% throatmeta$ID)
@@ -95,6 +98,7 @@ vars_table1 <- c(
   "EC_mean"
 )
 
+## ---- Export shotgun cohort characteristics by ethnicity ----
 table_one <- CreateTableOne(
   vars = vars_table1,
   strata = "EthnicityTotal",
@@ -104,10 +108,11 @@ table_one <- CreateTableOne(
 table_one_csv <- print(table_one, nonnormal = c(""), quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
 write.csv(table_one_csv, "results/tableone/table_shotgun.csv", row.names = TRUE)
 
-## 16S subset
+## ---- Select the rarefied throat 16S cohort and ethnicity groups ----
 ps <- readRDS("data/processed/ps_throat_rarefied.RDS")
 psmeta <- as(sample_data(ps), "data.frame") |> drop_small_groups()
 
+## ---- Export 16S cohort characteristics by ethnicity ----
 table_one_16s <- CreateTableOne(
   vars = vars_table1,
   strata = "EthnicityTotal",

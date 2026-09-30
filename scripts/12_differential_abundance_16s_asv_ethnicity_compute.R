@@ -134,7 +134,7 @@ assess_confounders <- function(meta, covariates) {
     }) |> bind_rows()
 }
 
-## ---- Per-pair analysis: MaAsLin2 + visualization ----
+## ---- Helper: fit pairwise MaAsLin2 models and prepare report inputs ----
 ## ps_site is already restricted to qualifying groups and antibiotic-free.
 ## sig_confounders was assessed once for the whole site (see
 ## assess_confounders() above) and is shared across every pair at this site.
@@ -294,7 +294,7 @@ run_da_pair <- function(ps_site, site_name, group1, group2, sig_confounders,
     )
 }
 
-## ---- Analysis loop over sites ----
+## ---- Load data and select cohorts for each site ----
 sites <- list(
     throat = readRDS("data/processed/ps_throat_rarefied.RDS"),
     nose   = readRDS("data/processed/ps_nose_rarefied.RDS")
@@ -370,6 +370,7 @@ for (site_name in names(sites)) {
     cat(site_name, "- Significant confounders (all groups):",
         paste(sig_confounders, collapse = ", "), "\n")
 
+    ## ---- Fit unadjusted and adjusted models for each ethnicity pair ----
     for (pair in pairs) {
         pair_result <- run_da_pair(ps, site_name, pair[1], pair[2], sig_confounders,
                         always_covariates, outdir)
@@ -381,6 +382,7 @@ for (site_name in names(sites)) {
 }
 
 dir.create(file.path(outdir, "cache"), recursive = TRUE, showWarnings = FALSE)
+## ---- Cache model summaries and reporting inputs ----
 saveRDS(list(pairs = report_pairs, confounders = confounders,
              summary = bind_rows(summary_rows)),
         file.path(outdir, "cache", "da_asv.rds"))

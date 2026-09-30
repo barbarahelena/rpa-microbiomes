@@ -1,6 +1,9 @@
-## Alpha diversity analysis: 16S microbiome (throat and nose)
-## Stratified by ethnicity (all groups with N > 50 per site)
-## with Kruskal-Wallis (+ pairwise Wilcoxon) and covariate-adjusted regression
+## Compute 16S alpha diversity by ethnicity (throat and nose).
+## 1. Load rarefied data, retain ethnicities N > 50, and calculate observed
+##    richness, Shannon, and Simpson diversity.
+## 2. Summarise by ethnicity; run Kruskal-Wallis, pairwise Wilcoxon,
+##    and covariate-adjusted linear regression analyses.
+## 3. Cache diversity values, summaries, and tests for the report and Figure 1.
 
 ## Libraries
 library(here)
@@ -50,7 +53,7 @@ run_regression <- function(df, metric, covariates) {
         mutate(metric = metric, .before = 1)
 }
 
-## ---- Analysis loop over sites ----
+## ---- Load data and calculate alpha diversity for each site ----
 sites <- list(
     throat = readRDS("data/processed/ps_throat_rarefied.RDS"),
     nose   = readRDS("data/processed/ps_nose_rarefied.RDS")
@@ -139,6 +142,7 @@ for (site_name in names(sites)) {
         pw = pairwise.wilcox.test(alpha_df$Shannon, alpha_df$EthnicityTotal,
                                  p.adjust.method = "BH")
     )
+    ## ---- Cache diversity values, summaries, and test results ----
     dir.create("results/alpha_diversity/cache", recursive = TRUE, showWarnings = FALSE)
     saveRDS(list(alpha_df = alpha_df,
             alpha_long = alpha_long,

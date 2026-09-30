@@ -1,4 +1,8 @@
 ## Compute participant air-pollution summaries and tests.
+## 1. Load cleaned metadata; retain PM2.5 exposure data and ethnicities N > 50.
+## 2. Summarise four pollutants overall/by ethnicity and run Kruskal-Wallis
+##    and BH-adjusted pairwise Wilcoxon tests.
+## 3. Cache summaries, tests, and plotting inputs for the report and Figure 1.
 
 ## Libraries
 library(here)
@@ -20,7 +24,7 @@ drop_small_groups <- function(data, min_n = 50) {
         droplevels()
 }
 
-## Data
+## ---- Load metadata and select participants with exposure data ----
 meta <- readRDS("data/processed/HELIUSmetadata_clean.RDS") |>
     filter(!is.na(PM25_mean)) |>
     drop_small_groups()
@@ -33,6 +37,7 @@ pollutants <- c(
     EC_mean   = "Soot/EC (µg/m³, 2013-2015 mean)"
 )
 
+## ---- Summarise pollutants and test differences by ethnicity ----
 ## Pairwise Wilcoxon (BH-adjusted) per pollutant - kept in full in the CSV;
 ## only p.adj < 0.05 pairs get bracket annotations on the boxplots (with up
 ## to 8 ethnicity groups / 28 pairs, showing every pair would be unreadable).
@@ -78,6 +83,7 @@ figure_tests <- lapply(names(pollutants), function(var) {
          pw = pairwise.wilcox.test(df$value, df$EthnicityTotal, p.adjust.method = "BH"))
 }) |> setNames(names(pollutants))
 
+## ---- Cache summaries, tests, and plotting inputs ----
 dir.create("results/airpollution/cache", recursive = TRUE, showWarnings = FALSE)
 saveRDS(list(meta = meta, pollutants = pollutants, pairwise_results = pairwise_results,
         summary_overall = summary_overall, summary_by_eth = summary_by_eth,
