@@ -14,8 +14,8 @@
 ## legend instead (same adjustment set for every pair at a site, see
 ## results/differential_abundance/confounder_assessment/, printed below).
 ## Rebuilt from the per-pair MaAsLin2 CSVs already written by
-## 9_differential_abundance_16s.R, so this script never refits anything -
-## run 9 first (DIFF_AB_TEST_N=<n> for a fast test run, matched here).
+## 12_differential_abundance_16s_asv_ethnicity_report.R, so this script never refits anything -
+## run pixi run diffabund-16s first (DIFF_AB_TEST_N=<n> must match).
 
 ## Libraries
 library(here)
@@ -25,40 +25,11 @@ library(grid)
 library(ggthemes)
 
 ## Functions
-theme_Publication <- function(base_size=14, base_family="sans") {
-    library(grid)
-    library(ggthemes)
-    library(stringr)
-    (theme_foundation(base_size=base_size, base_family=base_family)
-        + theme(plot.title = element_text(face = "bold",
-                                          size = rel(1.0), hjust = 0.5),
-                text = element_text(),
-                panel.background = element_rect(colour = NA, fill = NA),
-                plot.background = element_rect(colour = NA, fill = NA),
-                panel.border = element_rect(colour = NA),
-                axis.title = element_text(face = "bold",size = rel(0.8)),
-                axis.title.y = element_text(angle=90, vjust =2),
-                axis.title.x = element_text(vjust = -0.2),
-                axis.text = element_text(size = rel(0.7)),
-                axis.text.x = element_text(angle = 0),
-                axis.line = element_line(colour="black"),
-                axis.ticks = element_line(),
-                panel.grid.major = element_line(colour="#f0f0f0"),
-                panel.grid.minor = element_blank(),
-                legend.key = element_rect(colour = NA),
-                legend.position = "bottom",
-                legend.key.size= unit(0.2, "cm"),
-                legend.spacing  = unit(0, "cm"),
-                plot.margin=unit(c(10,5,5,5),"mm"),
-                strip.background=element_rect(colour="#f0f0f0",fill="#f0f0f0"),
-                strip.text = element_text(face="bold"),
-                plot.caption = element_text(size = rel(0.5), face = "italic")
-        ))
-}
+source(here::here("scripts", "lib", "plot_style.R"))
 
 ## Shorten covariate names for plot subtitles (drop trailing _FU/_BA suffix)
 ## and wrap long lists onto multiple lines instead of running off the page.
-## (same helper as 9_differential_abundance_16s.R)
+## (same helper as 12_differential_abundance_16s_asv_ethnicity_report.R)
 format_covariates <- function(covs, width = 70) {
     covs |>
         gsub("_(FU|BA)$", "", x = _) |>
@@ -67,7 +38,7 @@ format_covariates <- function(covs, width = 70) {
 }
 
 ## Short abbreviations for filenames (group names contain spaces/hyphens) -
-## same lookup as 9_differential_abundance_16s.R, needed here to rebuild the
+## same lookup as 12_differential_abundance_16s_asv_ethnicity_report.R, needed here to rebuild the
 ## pair_tag used in its output filenames.
 eth_abbrev <- c(
     "Dutch" = "Dutch",
@@ -81,19 +52,10 @@ eth_abbrev <- c(
 )
 pair_name <- function(g1, g2) paste0(eth_abbrev[[g1]], "_vs_", eth_abbrev[[g2]])
 
-eth_colours <- c(
-    "Dutch"                  = "#1F78B4",
-    "South-Asian Surinamese" = "#E31A1C",
-    "African Surinamese"     = "#33A02C",
-    "Javanese Surinamese"    = "#6A3D9A",
-    "Other"                  = "#B15928",
-    "Ghanaian"               = "#FF7F00",
-    "Turkish"                = "#E7298A",
-    "Moroccan"               = "#D4AC0D"
-)
+eth_colours <- ethnicity_colours
 
 ## Pairwise DA taxa count heatmap - same visual convention as the pairwise
-## PERMANOVA heatmap in 13_figure2_assembly.R (upper-triangle tile grid,
+## PERMANOVA heatmap in 15_figure2.R (upper-triangle tile grid,
 ## sequential fill), but cells hold a DA taxa count instead of R2.
 pairwise_sig_heatmap <- function(pair_counts, groups_order, title, fill_limits = c(0, NA)) {
     pair_counts <- pair_counts |>
@@ -115,7 +77,7 @@ pairwise_sig_heatmap <- function(pair_counts, groups_order, title, fill_limits =
 }
 
 ## Volcano plot for a single pair, rebuilt from the MaAsLin2 CSV already
-## written by 9_differential_abundance_16s.R (no refitting). Mirrors that
+## written by 12_differential_abundance_16s_asv_ethnicity_report.R (no refitting). Mirrors that
 ## script's volcano code, minus the file save and the adjustment-set
 ## subtitle (stated once in the figure legend instead - see
 ## site_confounder_label() below). label_n/title_site are lower/simpler
@@ -181,7 +143,7 @@ build_volcano <- function(diffab_dir, site_name, group1, group2,
 
 ## Significant-confounder set for a site, formatted for the figure legend
 ## text (same set adjusted for in every pairwise model at that site - see
-## 9_differential_abundance_16s.R's assess_confounders()).
+## 12_differential_abundance_16s_asv_ethnicity_report.R's assess_confounders()).
 site_confounder_label <- function(diffab_dir, site_name) {
     sig_confounders <- read_csv(
         file.path(diffab_dir, "confounder_assessment",
@@ -217,7 +179,7 @@ setwd(here::here())
 dir.create("results/figures", recursive = TRUE, showWarnings = FALSE)
 
 ## Differential abundance results must match whatever
-## 9_differential_abundance_16s.R was run with (DIFF_AB_TEST_N for a fast
+## 12_differential_abundance_16s_asv_ethnicity_report.R was run with (DIFF_AB_TEST_N for a fast
 ## test run, unset for the real one)
 test_n <- suppressWarnings(as.integer(Sys.getenv("DIFF_AB_TEST_N", "")))
 diffab_dir <- if (!is.na(test_n)) "results/differential_abundance_test" else "results/differential_abundance"
@@ -227,7 +189,7 @@ if (!is.na(test_n)) cat("TEST MODE: reading differential abundance results from"
 summary_pairs <- read_csv(file.path(diffab_dir, "summary_pairs_16s.csv"), show_col_types = FALSE)
 
 ## n_sig per pair: count qval < 0.05 in each pair's MaAsLin2 results (same
-## threshold as the forest plots and the upset plot in 10_upset_diffabund_16s.R)
+## threshold as the forest plots and the upset plot in 12_differential_abundance_16s_asv_ethnicity_report.R)
 summary_pairs <- summary_pairs |>
     rowwise() |>
     mutate(n_sig = {

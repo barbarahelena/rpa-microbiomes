@@ -2,7 +2,7 @@
 ## Stratified by ethnicity (all groups with N > 50 per site)
 ## Runs every permutation-heavy PERMANOVA/betadisper call (the expensive part
 ## of this analysis) and caches the results to .rds so
-## 7b_beta_diversity_16s_report.R can rebuild every plot/table without
+## 10_beta_diversity_16s_ethnicity_report.R can rebuild every plot/table without
 ## repeating the permutation tests.
 
 ## Libraries
@@ -18,7 +18,7 @@ setwd(here::here())
 ## Test mode: set BETA_DIV_TEST_N to cap each ethnicity group at N samples
 ## after group-size filtering, so the full pipeline runs in seconds instead
 ## of many minutes. Writes to a separate results dir so it can never clobber
-## a real run. Example: BETA_DIV_TEST_N=40 Rscript scripts/7a_beta_diversity_16s_compute.R
+## a real run. Example: BETA_DIV_TEST_N=40 Rscript scripts/10_beta_diversity_16s_ethnicity_compute.R
 test_n <- suppressWarnings(as.integer(Sys.getenv("BETA_DIV_TEST_N", "")))
 outdir <- if (!is.na(test_n)) "results/beta_diversity_test" else "results/beta_diversity"
 if (!is.na(test_n)) cat("TEST MODE: capping each group at", test_n, "samples, writing to", outdir, "\n")

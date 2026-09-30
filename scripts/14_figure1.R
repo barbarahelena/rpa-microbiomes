@@ -13,13 +13,8 @@
 ##     for nose/throat side by side.
 ##   - figure1_supp_betadisper.pdf/.png: betadisper (distance to centroid)
 ##     panels A/B for nose/throat side by side.
-## Alpha diversity, the density panels, and the map are recomputed directly
-## from the underlying phyloseq/geometry objects (cheap). The beta diversity
-## panels (PCoA, betadisper) are rebuilt from the .rds cache written by
-## 7a_beta_diversity_16s_compute.R, so this script never repeats a
-## permutation test - run 7a first (BETA_DIV_TEST_N=<n> for a fast test cache).
-## The map panel is rebuilt from the .rds geometry cache written by
-## 4_airpollution_amsterdam.R - run that first too.
+## All panels use saved analysis inputs/results. Run pixi run figure1 to
+## validate and build the required caches before assembling the figure.
 
 ## Libraries
 library(here)
@@ -32,49 +27,7 @@ library(ggpubr)
 library(sf)
 
 ## Functions
-theme_Publication <- function(base_size=14, base_family="sans") {
-    library(grid)
-    library(ggthemes)
-    library(stringr)
-    (theme_foundation(base_size=base_size, base_family=base_family)
-        + theme(plot.title = element_text(face = "bold",
-                                          size = rel(1.0), hjust = 0.5),
-                text = element_text(),
-                panel.background = element_rect(colour = NA, fill = NA),
-                plot.background = element_rect(colour = NA, fill = NA),
-                panel.border = element_rect(colour = NA),
-                axis.title = element_text(face = "bold",size = rel(0.8)),
-                axis.title.y = element_text(angle=90, vjust =2),
-                axis.title.x = element_text(vjust = -0.2),
-                axis.text = element_text(size = rel(0.7)),
-                axis.text.x = element_text(angle = 0),
-                axis.line = element_line(colour="black"),
-                axis.ticks = element_line(),
-                panel.grid.major = element_line(colour="#f0f0f0"),
-                panel.grid.minor = element_blank(),
-                legend.key = element_rect(colour = NA),
-                legend.position = "bottom",
-                legend.key.size= unit(0.2, "cm"),
-                legend.spacing  = unit(0, "cm"),
-                plot.margin=unit(c(10,5,5,5),"mm"),
-                strip.background=element_rect(colour="#f0f0f0",fill="#f0f0f0"),
-                strip.text = element_text(face="bold"),
-                plot.caption = element_text(size = rel(0.5), face = "italic")
-        ))
-}
-
-## Keep only ethnicity groups with more than n=50 samples (matches Table 1)
-keep_groups <- function(ps, min_n = 50) {
-    counts <- table(sample_data(ps)$EthnicityTotal)
-    names(counts)[counts > min_n]
-}
-
-## Same threshold, for a plain data.frame (participant-level metadata) rather
-## than a phyloseq object
-keep_groups_df <- function(df, min_n = 50) {
-    counts <- table(df$EthnicityTotal)
-    names(counts)[counts > min_n]
-}
+source(here::here("scripts", "lib", "plot_style.R"))
 
 ## PCoA ordination panel (points + 95% ellipses, centroids when >3 groups,
 ## PERMANOVA R2/p annotation) - shared by the main figure's Weighted UniFrac
@@ -131,23 +84,14 @@ build_pcoa_panel <- function(meta, pcoa, block, dist_name, site_name, eth_colour
 setwd(here::here())
 dir.create("results/figures", recursive = TRUE, showWarnings = FALSE)
 
-## Beta diversity cache must match whatever 7a_beta_diversity_16s_compute.R
+## Beta diversity cache must match whatever 10_beta_diversity_16s_ethnicity_compute.R
 ## was run with (BETA_DIV_TEST_N for a fast test cache, unset for the real one)
 test_n <- suppressWarnings(as.integer(Sys.getenv("BETA_DIV_TEST_N", "")))
 beta_outdir <- if (!is.na(test_n)) "results/beta_diversity_test" else "results/beta_diversity"
 if (!is.na(test_n)) cat("TEST MODE: reading beta diversity cache from", beta_outdir, "\n")
 
-## Ethnicity colours (same validated palette as scripts 6-8)
-eth_colours <- c(
-    "Dutch"                  = "#1F78B4",
-    "South-Asian Surinamese" = "#E31A1C",
-    "African Surinamese"     = "#33A02C",
-    "Javanese Surinamese"    = "#6A3D9A",
-    "Other"                  = "#B15928",
-    "Ghanaian"               = "#FF7F00",
-    "Turkish"                = "#E7298A",
-    "Moroccan"               = "#D4AC0D"
-)
+## Shared ethnicity colours
+eth_colours <- ethnicity_colours
 
 sites <- c("nose", "throat")
 
@@ -155,12 +99,12 @@ sites <- c("nose", "throat")
 geo_cache_path <- "results/airpollution/amsterdam_pc6_geo.rds"
 if (!file.exists(geo_cache_path)) {
     stop("No Amsterdam PC6 geometry cache at ", geo_cache_path,
-         " - run scripts/4_airpollution_amsterdam.R first.")
+         " - run scripts/06_air_pollution_amsterdam_prepare.R first.")
 }
 geo <- readRDS(geo_cache_path)
 
 ## coord_sf(expand = FALSE) plus zero plot margins keep each map filling its
-## panel instead of floating in whitespace (see 4_airpollution_amsterdam.R
+## panel instead of floating in whitespace (see 06_air_pollution_amsterdam_prepare.R
 ## for why the source geometries can otherwise produce a wildly oversized
 ## bounding box)
 map_specs <- list(
@@ -190,16 +134,15 @@ map_panels <- lapply(map_specs, build_map_panel, geo = geo)
 
 ## ---- Panels E/F/G/H: participant-level air pollution exposure by ethnicity ----
 ## Unlike the city-wide PC6 maps above, these are per-participant RIVM/ALO
-## estimates linked to each HELIUS participant (see 3_airpollution_participants.R,
+## estimates linked to each HELIUS participant (see 04_air_pollution_participants_report.R,
 ## which this reuses the exact data/threshold/test convention from). Each
 ## panel's x-axis is reordered by that pollutant's group mean (low to high)
 ## rather than a fixed ethnicity order, so the gradient reads directly
 ## without cross-referencing the legend.
-pollution_meta <- readRDS("data/processed/HELIUSmetadata_clean.RDS") |>
-    filter(!is.na(PM25_mean))
-pollution_meta <- pollution_meta |>
-    filter(EthnicityTotal %in% keep_groups_df(pollution_meta)) |>
-    mutate(EthnicityTotal = droplevels(factor(EthnicityTotal)))
+cache_path <- "results/airpollution/cache/participant_exposure.rds"
+if (!file.exists(cache_path)) stop("Missing cache: ", cache_path, "; run pixi run airpollution-participants-compute first.")
+exposure_cache <- readRDS(cache_path)
+pollution_meta <- exposure_cache$meta
 
 pollution_specs <- list(
     list(col = "PM10_mean", title = "PM10 (2013-2015 mean)",    y = "PM10 (µg/m³)"),
@@ -223,12 +166,12 @@ build_pollution_panel <- function(spec, meta, eth_colours) {
     ## Kruskal-Wallis omnibus + pairwise Wilcoxon (BH-adjusted), same
     ## convention as the Shannon panels above - only the 6 most significant
     ## pairs get a bracket, full results aren't written here since this
-    ## duplicates 3_airpollution_participants.R's own CSV output. The
+    ## duplicates 04_air_pollution_participants_report.R's own CSV output. The
     ## omnibus p-value is placed in the subtitle (above the plot area)
     ## rather than drawn onto the panel with stat_compare_means, so it
     ## doesn't compete for space with the boxes/brackets.
-    kw_p <- kruskal.test(value ~ EthnicityTotal, data = df)$p.value
-    pw <- pairwise.wilcox.test(df$value, df$EthnicityTotal, p.adjust.method = "BH")
+    kw_p <- exposure_cache$figure_tests[[spec$col]]$kw_p
+    pw <- exposure_cache$figure_tests[[spec$col]]$pw
     max_val <- max(df$value)
     min_val <- min(df$value)
     step <- (max_val - min_val) * 0.08
@@ -281,23 +224,10 @@ pollution_panels <- lapply(pollution_specs, build_pollution_panel,
 month_starts <- yday(as.Date(paste0("2001-", 1:12, "-01")))
 
 build_density_panel <- function(site_name, eth_colours) {
-    ## Unrarefied, QC'd phyloseq object (post decontam/dedup, pre
-    ## rarefaction) - rarefaction-driven sample dropout isn't relevant to a
-    ## sampling-date check
-    ps <- readRDS(paste0("data/processed/ps_", site_name, ".RDS"))
-    ## subset_samples()'s non-standard evaluation of its subset expression
-    ## doesn't reliably resolve local variables when called from inside a
-    ## function invoked via lapply (unlike the top-level loops below) -
-    ## prune_samples() takes a plain logical vector instead, sidestepping
-    ## the NSE lookup entirely
-    keep <- keep_groups(ps)
-    ps <- prune_samples(sample_data(ps)$EthnicityTotal %in% keep, ps)
-
-    date_df <- sample_data(ps) |>
-        as("data.frame") |>
-        filter(!is.na(Collection_Date)) |>
-        mutate(EthnicityTotal = droplevels(factor(EthnicityTotal)),
-               yday = yday(Collection_Date))
+    cache_path <- paste0("results/sample_metadata/cache/seasonality_16s_", site_name, ".rds")
+    if (!file.exists(cache_path)) stop("Missing cache: ", cache_path, "; run pixi run sample-characteristics first.")
+    season_cache <- readRDS(cache_path)
+    date_df <- season_cache$date_df
 
     ggplot(date_df, aes(x = yday, colour = EthnicityTotal, fill = EthnicityTotal)) +
         geom_density(alpha = 0.15, linewidth = 0.8) +
@@ -319,31 +249,20 @@ density_panels <- lapply(sites, build_density_panel, eth_colours = eth_colours) 
 shannon_panels <- list()
 
 for (site_name in sites) {
-    ps <- readRDS(paste0("data/processed/ps_", site_name, "_rarefied.RDS"))
-    ps <- subset_samples(ps, EthnicityTotal %in% keep_groups(ps))
-
-    alpha_df <- estimate_richness(ps, measures = "Shannon") |>
-        rownames_to_column("sample_id")
-
-    meta <- sample_data(ps) |>
-        as("data.frame") |>
-        rownames_to_column("sample_id") |>
-        select(sample_id, EthnicityTotal) |>
-        mutate(EthnicityTotal = droplevels(factor(EthnicityTotal)))
-
-    alpha_df <- alpha_df |>
-        left_join(meta, by = "sample_id") |>
-        filter(!is.na(EthnicityTotal))
+    cache_path <- paste0("results/alpha_diversity/cache/alpha_16s_", site_name, ".rds")
+    if (!file.exists(cache_path)) stop("Missing cache: ", cache_path, "; run pixi run alpha-16s-compute first.")
+    alpha_cache <- readRDS(cache_path)
+    alpha_df <- alpha_cache$alpha_df
 
     ## Kruskal-Wallis omnibus + pairwise Wilcoxon (BH-adjusted), same
-    ## convention as 6_alpha_diversity_16s_ethnicity.R. Only p.adj < 0.05
+    ## convention as 08_alpha_diversity_16s_ethnicity_report.R. Only p.adj < 0.05
     ## pairs get a bracket - up to 10 (nose) or 15 (throat) possible pairs
     ## would be unreadable if all were drawn. The omnibus p-value is placed
     ## in the subtitle (above the plot area) rather than drawn onto the
     ## panel with stat_compare_means, so it doesn't compete for space with
     ## the boxes/brackets.
-    kw_p <- kruskal.test(Shannon ~ EthnicityTotal, data = alpha_df)$p.value
-    pw <- pairwise.wilcox.test(alpha_df$Shannon, alpha_df$EthnicityTotal, p.adjust.method = "BH")
+    kw_p <- alpha_cache$figure_tests$kw_p
+    pw <- alpha_cache$figure_tests$pw
     max_val <- max(alpha_df$Shannon)
     min_val <- min(alpha_df$Shannon)
     step <- (max_val - min_val) * 0.06
@@ -400,7 +319,7 @@ for (site_name in sites) {
     cache_path <- file.path(beta_outdir, "cache", paste0("beta_diversity_16s_", site_name, ".rds"))
     if (!file.exists(cache_path)) {
         stop("No beta diversity cache for '", site_name, "' at ", cache_path,
-             " - run scripts/7a_beta_diversity_16s_compute.R first.")
+             " - run scripts/10_beta_diversity_16s_ethnicity_compute.R first.")
     }
     cache <- readRDS(cache_path)
     caches[[site_name]] <- cache

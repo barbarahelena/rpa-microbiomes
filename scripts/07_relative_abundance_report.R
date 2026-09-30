@@ -1,5 +1,5 @@
 ## Descriptive composition plots: stacked bar plots of relative abundance
-## 16S: overall composition (no ethnicity metadata available)
+## 16S: overall composition across participants
 ## Shotgun: split by ethnicity (Dutch vs South-Asian Surinamese)
 
 ## Libraries
@@ -8,36 +8,7 @@ library(tidyverse)
 library(phyloseq)
 
 ## Functions
-theme_Publication <- function(base_size=14, base_family="sans") {
-    library(grid)
-    library(ggthemes)
-    library(stringr)
-    (theme_foundation(base_size=base_size, base_family=base_family)
-        + theme(plot.title = element_text(face = "bold",
-                                          size = rel(1.0), hjust = 0.5),
-                text = element_text(),
-                panel.background = element_rect(colour = NA, fill = NA),
-                plot.background = element_rect(colour = NA, fill = NA),
-                panel.border = element_rect(colour = NA),
-                axis.title = element_text(face = "bold",size = rel(0.8)),
-                axis.title.y = element_text(angle=90, vjust =2),
-                axis.title.x = element_text(vjust = -0.2),
-                axis.text = element_text(size = rel(0.7)),
-                axis.text.x = element_text(angle = 0),
-                axis.line = element_line(colour="black"),
-                axis.ticks = element_line(),
-                panel.grid.major = element_line(colour="#f0f0f0"),
-                panel.grid.minor = element_blank(),
-                legend.key = element_rect(colour = NA),
-                legend.position = "bottom",
-                legend.key.size= unit(0.2, "cm"),
-                legend.spacing  = unit(0, "cm"),
-                plot.margin=unit(c(10,5,5,5),"mm"),
-                strip.background=element_rect(colour="#f0f0f0",fill="#f0f0f0"),
-                strip.text = element_text(face="bold"),
-                plot.caption = element_text(size = rel(0.5), face = "italic")
-        ))
-      }
+source(here::here("scripts", "lib", "plot_style.R"))
 
 # Helper: summarise mean relative abundance, keep top_n taxa, lump rest as "Other"
 # df must have columns: sample_id, Abundance, and the tax_rank column

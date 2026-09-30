@@ -7,44 +7,9 @@ library(tidyverse)
 library(vegan)
 library(broom)
 
-## Functions
-theme_Publication <- function(base_size=14, base_family="sans") {
-    library(grid)
-    library(ggthemes)
-    library(stringr)
-    (theme_foundation(base_size=base_size, base_family=base_family)
-        + theme(plot.title = element_text(face = "bold",
-                                          size = rel(1.0), hjust = 0.5),
-                text = element_text(),
-                panel.background = element_rect(colour = NA, fill = NA),
-                plot.background = element_rect(colour = NA, fill = NA),
-                panel.border = element_rect(colour = NA),
-                axis.title = element_text(face = "bold",size = rel(0.8)),
-                axis.title.y = element_text(angle=90, vjust =2),
-                axis.title.x = element_text(vjust = -0.2),
-                axis.text = element_text(size = rel(0.7)),
-                axis.text.x = element_text(angle = 0),
-                axis.line = element_line(colour="black"),
-                axis.ticks = element_line(),
-                panel.grid.major = element_line(colour="#f0f0f0"),
-                panel.grid.minor = element_blank(),
-                legend.key = element_rect(colour = NA),
-                legend.position = "bottom",
-                legend.key.size= unit(0.2, "cm"),
-                legend.spacing  = unit(0, "cm"),
-                plot.margin=unit(c(10,5,5,5),"mm"),
-                strip.background=element_rect(colour="#f0f0f0",fill="#f0f0f0"),
-                strip.text = element_text(face="bold"),
-                plot.caption = element_text(size = rel(0.5), face = "italic")
-        ))
-}
-
 ## Setup
 setwd(here::here())
 dir.create("results/alpha_diversity", recursive = TRUE, showWarnings = FALSE)
-
-## Define ethnicity colours
-eth_colours <- c("Dutch" = "#1F78B4", "South-Asian Surinamese" = "#E31A1C")
 
 ## Covariates for linear regression
 ## Note: MigrationGen and ResidenceDuration_BA are excluded because they are
@@ -133,48 +98,17 @@ for (site_name in names(sites)) {
             max    = max(value),
             .groups = "drop"
         )
-    write_csv(summary_table,
-              paste0("results/alpha_diversity/alpha_diversity_summary_shotgun_",
-                     site_name, ".csv"))
-
-    ## ---- Boxplots by ethnicity (primary figure) ----
-    ggplot(alpha_long, aes(x = EthnicityTotal, y = value, fill = EthnicityTotal)) +
-        geom_boxplot(outlier.shape = 21, outlier.size = 0.8, alpha = 0.7) +
-        facet_wrap(~ metric, scales = "free_y", nrow = 1) +
-        scale_fill_manual(values = eth_colours) +
-        labs(x = NULL, y = "Value", fill = "Ethnicity",
-             title = paste0("Alpha diversity by ethnicity - shotgun ",
-                            site_name, " (n = ", n_samples, ")")) +
-        theme_Publication() +
-        theme(axis.text.x = element_text(angle = 25, hjust = 1))
-    ggsave(paste0("results/alpha_diversity/alpha_diversity_boxplot_shotgun_",
-                  site_name, ".pdf"),
-           width = 8, height = 5)
-
-    ## ---- Violin + boxplot (distribution overview) ----
-    ggplot(alpha_long, aes(x = metric, y = value)) +
-        geom_violin(fill = "#A6CEE3", alpha = 0.7) +
-        geom_boxplot(width = 0.15, fill = "white",
-                     outlier.shape = 21, outlier.size = 0.8) +
-        facet_wrap(~ metric, scales = "free_y", nrow = 1) +
-        labs(x = NULL, y = "Value",
-             title = paste0("Alpha diversity - shotgun ", site_name,
-                            " (n = ", n_samples, ")")) +
-        theme_Publication() +
-        theme(axis.text.x = element_blank(),
-              axis.ticks.x = element_blank())
-    ggsave(paste0("results/alpha_diversity/alpha_diversity_violin_shotgun_",
-                  site_name, ".pdf"),
-           width = 8, height = 5)
 
     ## ---- Linear regression ----
     reg_results <- bind_rows(
         run_regression(alpha_df, "Observed", covariates),
         run_regression(alpha_df, "Shannon", covariates)
     )
-    write_csv(reg_results,
-              paste0("results/alpha_diversity/alpha_diversity_regression_shotgun_",
-                     site_name, ".csv"))
-
-    cat("Completed:", site_name, "—", n_samples, "samples\n")
+    dir.create("results/alpha_diversity/cache", recursive = TRUE, showWarnings = FALSE)
+    saveRDS(list(alpha_df = alpha_df,
+            alpha_long = alpha_long,
+            n_samples = n_samples,
+            summary_table = summary_table,
+            reg_results = reg_results),
+            paste0("results/alpha_diversity/cache/alpha_shotgun_", site_name, ".rds"))
 }

@@ -359,7 +359,7 @@ dim(df_new2)
 
 ## Air pollution exposure (RIVM Atlas Leefomgeving, via Gecco data request 2401)
 ## Linked via Heliusnr + 1900253 = HELIUS ID - the same offset used for Ext_ID
-## in 1b_datacleaning_biome.R to link 16S samples to this clinical metadata.
+## in 02_clean_microbiome.R to link 16S samples to this clinical metadata.
 airpol_raw <- haven::read_sav("data/raw/231108b_HELIUS data Barbara Verhaar_GECCO.sav")
 
 ## conc_ALO_* == 0 for every year is a failed-geocoding/missing sentinel in the

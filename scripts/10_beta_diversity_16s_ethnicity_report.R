@@ -1,5 +1,5 @@
 ## Beta diversity analysis: 16S microbiome (throat and nose) - REPORT STEP
-## Reads the .rds cache written by 7a_beta_diversity_16s_compute.R and builds
+## Reads the .rds cache written by 10_beta_diversity_16s_ethnicity_compute.R and builds
 ## every plot and table (PCoA, betadisper, PERMANOVA tables/heatmaps,
 ## covariate screen, ethnicity attenuation) without repeating any permutation
 ## test. Run 5a first (or via the beta-16s pixi task, which chains both).
@@ -12,42 +12,13 @@ library(grid)
 library(ggthemes)
 
 ## Functions
-theme_Publication <- function(base_size=14, base_family="sans") {
-    library(grid)
-    library(ggthemes)
-    library(stringr)
-    (theme_foundation(base_size=base_size, base_family=base_family)
-        + theme(plot.title = element_text(face = "bold",
-                                          size = rel(1.0), hjust = 0.5),
-                text = element_text(),
-                panel.background = element_rect(colour = NA, fill = NA),
-                plot.background = element_rect(colour = NA, fill = NA),
-                panel.border = element_rect(colour = NA),
-                axis.title = element_text(face = "bold",size = rel(0.8)),
-                axis.title.y = element_text(angle=90, vjust =2),
-                axis.title.x = element_text(vjust = -0.2),
-                axis.text = element_text(size = rel(0.7)),
-                axis.text.x = element_text(angle = 0),
-                axis.line = element_line(colour="black"),
-                axis.ticks = element_line(),
-                panel.grid.major = element_line(colour="#f0f0f0"),
-                panel.grid.minor = element_blank(),
-                legend.key = element_rect(colour = NA),
-                legend.position = "bottom",
-                legend.key.size= unit(0.2, "cm"),
-                legend.spacing  = unit(0, "cm"),
-                plot.margin=unit(c(10,5,5,5),"mm"),
-                strip.background=element_rect(colour="#f0f0f0",fill="#f0f0f0"),
-                strip.text = element_text(face="bold"),
-                plot.caption = element_text(size = rel(0.5), face = "italic")
-        ))
-}
+source(here::here("scripts", "lib", "plot_style.R"))
 
 ## Setup
 setwd(here::here())
 
-## Test mode must match the outdir 7a_beta_diversity_16s_compute.R wrote the
-## cache to. Example: BETA_DIV_TEST_N=40 Rscript scripts/7b_beta_diversity_16s_report.R
+## Test mode must match the outdir 10_beta_diversity_16s_ethnicity_compute.R wrote the
+## cache to. Example: BETA_DIV_TEST_N=40 Rscript scripts/10_beta_diversity_16s_ethnicity_report.R
 test_n <- suppressWarnings(as.integer(Sys.getenv("BETA_DIV_TEST_N", "")))
 outdir <- if (!is.na(test_n)) "results/beta_diversity_test" else "results/beta_diversity"
 if (!is.na(test_n)) cat("TEST MODE: reading/writing", outdir, "\n")
@@ -57,16 +28,7 @@ for (sub in c("pcoa", "permanova", "covariate_screen", "betadisper", "batch_effe
 }
 
 ## Define ethnicity colours
-eth_colours <- c(
-    "Dutch"                  = "#1F78B4",  # blue
-    "South-Asian Surinamese" = "#E31A1C",  # red
-    "African Surinamese"     = "#33A02C",  # green
-    "Javanese Surinamese"    = "#6A3D9A",  # purple
-    "Other"                  = "#B15928",  # brown
-    "Ghanaian"               = "#FF7F00",  # orange
-    "Turkish"                = "#E7298A",  # magenta
-    "Moroccan"               = "#D4AC0D"   # gold
-)
+eth_colours <- ethnicity_colours
 
 ## Generic categorical palette for the supplementary covariate-coloured PCoA
 ## plots (same validated hues as eth_colours, applied by position since each
@@ -233,7 +195,7 @@ for (site_name in c("throat", "nose")) {
     cache_path <- file.path(outdir, "cache", paste0("beta_diversity_16s_", site_name, ".rds"))
     if (!file.exists(cache_path)) {
         stop("No cache for '", site_name, "' at ", cache_path,
-             " - run scripts/7a_beta_diversity_16s_compute.R first.")
+             " - run scripts/10_beta_diversity_16s_ethnicity_compute.R first.")
     }
     cache <- readRDS(cache_path)
     meta      <- cache$meta
@@ -424,7 +386,7 @@ for (site_name in c("throat", "nose")) {
 
         ## Ethnicity attenuation: which covariates explain the most of
         ## ethnicity's effect on beta diversity (see ethnicity_attenuation()
-        ## in scripts/7a_beta_diversity_16s_compute.R)
+        ## in scripts/10_beta_diversity_16s_ethnicity_compute.R)
         write_csv(ethnicity_attenuation,
                   paste0(outdir, "/covariate_screen/ethnicity_attenuation_", dist_label,
                          "_16s_", site_name, ".csv"))
@@ -469,7 +431,7 @@ for (site_name in c("throat", "nose")) {
         ## ---- Batch effect illustration: standalone PCoA + effect size,
         ## kept separate from the covariate screen/PCoA panels above so
         ## sequencing batch (always adjusted for, never screened - see
-        ## always_covariates in 7a_beta_diversity_16s_compute.R) doesn't show
+        ## always_covariates in 10_beta_diversity_16s_ethnicity_compute.R) doesn't show
         ## up as one of the ethnicity-model covariates, while its own
         ## (unadjusted) effect size on beta diversity is still visible ----
         write_csv(batch_screen,

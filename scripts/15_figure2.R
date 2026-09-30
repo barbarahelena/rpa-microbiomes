@@ -5,8 +5,8 @@
 ## Also writes a supplement (figure2_supp_braycurtis_pairwise.pdf/.png) with
 ## Bray-Curtis pairwise PERMANOVA heatmaps: A/B unadjusted (nose/throat),
 ## C/D adjusted for significant covariates (nose/throat).
-## Rebuilt from the .rds cache written by 7a_beta_diversity_16s_compute.R, so
-## this script never repeats a permutation test - run 7a first
+## Rebuilt from the .rds cache written by 10_beta_diversity_16s_ethnicity_compute.R, so
+## this script never repeats a permutation test - run pixi run beta-16s-compute first
 ## (BETA_DIV_TEST_N=<n> for a fast test cache).
 
 ## Libraries
@@ -17,39 +17,10 @@ library(grid)
 library(ggthemes)
 
 ## Functions
-theme_Publication <- function(base_size=14, base_family="sans") {
-    library(grid)
-    library(ggthemes)
-    library(stringr)
-    (theme_foundation(base_size=base_size, base_family=base_family)
-        + theme(plot.title = element_text(face = "bold",
-                                          size = rel(1.0), hjust = 0.5),
-                text = element_text(),
-                panel.background = element_rect(colour = NA, fill = NA),
-                plot.background = element_rect(colour = NA, fill = NA),
-                panel.border = element_rect(colour = NA),
-                axis.title = element_text(face = "bold",size = rel(0.8)),
-                axis.title.y = element_text(angle=90, vjust =2),
-                axis.title.x = element_text(vjust = -0.2),
-                axis.text = element_text(size = rel(0.7)),
-                axis.text.x = element_text(angle = 0),
-                axis.line = element_line(colour="black"),
-                axis.ticks = element_line(),
-                panel.grid.major = element_line(colour="#f0f0f0"),
-                panel.grid.minor = element_blank(),
-                legend.key = element_rect(colour = NA),
-                legend.position = "bottom",
-                legend.key.size= unit(0.2, "cm"),
-                legend.spacing  = unit(0, "cm"),
-                plot.margin=unit(c(10,5,5,5),"mm"),
-                strip.background=element_rect(colour="#f0f0f0",fill="#f0f0f0"),
-                strip.text = element_text(face="bold"),
-                plot.caption = element_text(size = rel(0.5), face = "italic")
-        ))
-}
+source(here::here("scripts", "lib", "plot_style.R"))
 
 ## Word-wraps a title/subtitle to a fixed character width so it fits inside
-## the plot instead of running off the page (same helper as 7b's report script)
+## the plot instead of running off the page (same helper as the ethnicity beta-diversity report’s report script)
 wrap_for_plot <- function(x, width = 50) {
     if (is.null(x)) return(list(text = NULL, n_lines = 0))
     wrapped <- str_wrap(x, width = width)
@@ -57,7 +28,7 @@ wrap_for_plot <- function(x, width = 50) {
 }
 
 ## Pairwise PERMANOVA R2 heatmap (BH-adjusted significance stars) - same as
-## pairwise_permanova_heatmap() in 7b_beta_diversity_16s_report.R
+## pairwise_permanova_heatmap() in 10_beta_diversity_16s_ethnicity_report.R
 pairwise_permanova_heatmap <- function(pairwise_df, groups_order, title, subtitle = NULL,
                                         fill_limits = c(0, NA)) {
     pairwise_mat_df <- pairwise_df |>
@@ -98,7 +69,7 @@ pairwise_permanova_heatmap <- function(pairwise_df, groups_order, title, subtitl
 setwd(here::here())
 dir.create("results/figures", recursive = TRUE, showWarnings = FALSE)
 
-## Beta diversity cache must match whatever 7a_beta_diversity_16s_compute.R
+## Beta diversity cache must match whatever 10_beta_diversity_16s_ethnicity_compute.R
 ## was run with (BETA_DIV_TEST_N for a fast test cache, unset for the real one)
 test_n <- suppressWarnings(as.integer(Sys.getenv("BETA_DIV_TEST_N", "")))
 beta_outdir <- if (!is.na(test_n)) "results/beta_diversity_test" else "results/beta_diversity"
@@ -155,7 +126,7 @@ for (site_name in sites) {
     cache_path <- file.path(beta_outdir, "cache", paste0("beta_diversity_16s_", site_name, ".rds"))
     if (!file.exists(cache_path)) {
         stop("No beta diversity cache for '", site_name, "' at ", cache_path,
-             " - run scripts/7a_beta_diversity_16s_compute.R first.")
+             " - run scripts/10_beta_diversity_16s_ethnicity_compute.R first.")
     }
     cache <- readRDS(cache_path)
     caches[[site_name]] <- cache
@@ -174,7 +145,7 @@ for (site_name in sites) {
 
     ## ---- Panel E/F: pairwise PERMANOVA heatmap, Weighted UniFrac, adjusted
     ## for that site's significant covariates (see pairwise_permanova_adjusted()
-    ## in 7a_beta_diversity_16s_compute.R). No subtitle listing the covariates
+    ## in 10_beta_diversity_16s_ethnicity_compute.R). No subtitle listing the covariates
     ## here - same fill scale as A/B (not its own max) so the shrinkage after
     ## adjustment is visible directly by colour, title-only like A/B.
     adj_heatmap_panels[[site_name]] <- pairwise_permanova_heatmap(
@@ -252,7 +223,7 @@ cat("Saved results/figures/figure2.pdf and .png\n")
 ## ---- Supplement: Bray-Curtis pairwise PERMANOVA, unadjusted vs adjusted ----
 ## Reuses the cache objects already loaded above - no recompute. Unadjusted
 ## and adjusted heatmaps for the same site share one colour scale (as in
-## 7b's per-site heatmaps) so the two are visually comparable.
+## the ethnicity beta-diversity report’s per-site heatmaps) so the two are visually comparable.
 bc_pairwise_panels <- list()
 
 for (site_name in sites) {
@@ -289,7 +260,7 @@ bc_grid <- plot_grid(
 )
 
 ## Fixed height (not dynamically sized to the adjusted panels' subtitle,
-## unlike 7b's per-panel plots) - generous enough for the wrapped covariate
+## unlike the ethnicity beta-diversity report’s per-panel plots) - generous enough for the wrapped covariate
 ## list subtitle on the adjusted row
 ggsave("results/figures/figure2_supp_braycurtis_pairwise.pdf", plot = bc_grid,
        width = 12, height = 13)
@@ -300,7 +271,7 @@ cat("Saved results/figures/figure2_supp_braycurtis_pairwise.pdf and .png\n")
 
 ## ---- Supplement: ethnicity attenuation by covariate, nose vs throat ----
 ## Reuses the cache objects already loaded above - no recompute. Same
-## summary plot as 7b_beta_diversity_16s_report.R's per-site attenuation
+## summary plot as 10_beta_diversity_16s_ethnicity_report.R's per-site attenuation
 ## plot (abs_reduction = how much ethnicity's PERMANOVA R2 drops once that
 ## one covariate is adjusted for), just nose and throat assembled side by
 ## side instead of as two separate per-site files.

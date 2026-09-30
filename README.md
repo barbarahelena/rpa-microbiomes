@@ -6,36 +6,105 @@ Two microbiome data types from the HELIUS cohort, processed in parallel:
 - **16S rRNA amplicon sequencing** — throat and nose swabs
 - **Shotgun metagenomics** — tongue and throat swabs
 
-Raw sequencing output and clinical/metadata are cleaned into `phyloseq`/table objects in `data/processed/` (see `scripts/1a_datacleaning_helius.R` and `scripts/1b_datacleaning_biome.R`).
+Raw sequencing output and clinical/metadata are cleaned into `phyloseq`/table objects in `data/processed/` (see `scripts/01_clean_metadata.R` and `scripts/02_clean_microbiome.R`).
 
 ### Upstream read processing
-`scripts/0_run_vsearch.sh` is a SLURM batch script that runs a Nextflow vsearch pipeline (clustering/rarefaction of raw sequencing reads into ASV tables) on the Snellius HPC cluster, ahead of and separate from the `pixi`-managed steps below. Its output feeds into `1a_datacleaning_helius.R`/`1b_datacleaning_biome.R`; submit it with `sbatch scripts/0_run_vsearch.sh`.
+`scripts/00_run_vsearch.sh` is a SLURM batch script that runs a Nextflow vsearch pipeline (clustering/rarefaction of raw sequencing reads into ASV tables) on the Snellius HPC cluster, ahead of and separate from the `pixi`-managed steps below. Its output is imported as the raw phyloseq input to `02_clean_microbiome.R`; submit it with `sbatch scripts/00_run_vsearch.sh`.
 
 ## Analysis pipeline
-Scripts in `scripts/` are numbered in run order:
+Scripts are numbered in **reading order**, grouped by analysis family. They
+form a dependency graph, not one sequential chain. Pixi runs the prerequisites
+needed for the requested output.
 
-| Script | Analysis | Pixi task |
+Names follow `number_analysis_sequencing-type_comparison_stage.R`, omitting
+parts that do not apply. In the table, `{compute,report}` means two files.
+
+| Script(s) | Purpose | Pixi entry point |
 |---|---|---|
-| `1a_datacleaning_helius.R` | Clean HELIUS clinical/metadata | `clean-helius` |
-| `1b_datacleaning_biome.R` | Clean and filter 16S and shotgun microbiome data into `phyloseq` objects | `clean-biome` |
-| `2_tableone.R` | Table 1: cohort characteristics | `tableone` |
-| `3_airpollution_participants.R` | Air pollution exposure distribution among HELIUS participants, overall and by ethnicity | `airpollution-participants` |
-| `4_airpollution_amsterdam.R` | Amsterdam-wide PC6 air pollution map | `airpollution-amsterdam` |
-| `5_relative_abundance_plots.R` | Compositional (stacked bar) plots of taxon relative abundance | `relabund-plots` |
-| `6_alpha_diversity_16s_ethnicity.R` | Alpha diversity, 16S throat and nose, stratified by ethnicity | `alpha-16s` |
-| `7a_beta_diversity_16s_compute.R` | Beta diversity, 16S throat and nose: permutation-heavy PERMANOVA/betadisper computation, cached to `.rds` | `beta-16s-compute` |
-| `7b_beta_diversity_16s_report.R` | Beta diversity, 16S throat and nose: rebuild plots/tables from cached PERMANOVA/betadisper results (PCoA, betadisper, PERMANOVA, covariate screen, ethnicity attenuation) | `beta-16s-report` |
-| `8_beta_diversity_16s_migration.R` | Beta diversity, 16S, non-Dutch groups pooled by migration generation/acculturation | `beta-16s-migration` |
-| `9_differential_abundance_16s.R` | Differential abundance, 16S throat and nose, pairwise ethnicity comparisons (MaAsLin2) | `diffabund-16s` |
-| `9b_differential_abundance_genus_16s.R` | Differential abundance at genus level, 16S throat and nose, pairwise ethnicity comparisons (MaAsLin2) | `diffabund-16s-genus` |
-| `10_upset_diffabund_16s.R` | Overlap of significant differentially abundant taxa across ethnicity pairs | `upset-diffabund-16s` |
-| `11_alpha_diversity_shotgun.R` | Alpha diversity, shotgun tongue and throat, stratified by ethnicity | `alpha-shotgun` |
+| `01_clean_metadata.R` | Clinical metadata and linked participant exposure | `clean-helius` |
+| `02_clean_microbiome.R` | Clean 16S/shotgun objects, metadata linkage and diagnostic plots | `clean-biome` |
+| `03_cohort_characteristics.R` | Cohort characteristics tables | `tableone` |
+| `04_air_pollution_participants_{compute,report}.R` | Address-linked exposure estimates for HELIUS participants, compared across ethnicities | `airpollution-participants` |
+| `05_sample_characteristics.R` | Sampling seasonality and sequencing-batch composition | `sample-characteristics` |
+| `06_air_pollution_amsterdam_{prepare,report}.R` | Geographical exposure data and Amsterdam-wide maps | `airpollution-amsterdam` |
+| `07_relative_abundance_report.R` | Relative-abundance plots for 16S and shotgun | `relabund-plots` |
+| `08_alpha_diversity_16s_ethnicity_{compute,report}.R` | 16S alpha diversity by ethnicity | `alpha-16s` |
+| `09_alpha_diversity_shotgun_ethnicity_{compute,report}.R` | Shotgun alpha diversity by ethnicity | `alpha-shotgun` |
+| `10_beta_diversity_16s_ethnicity_{compute,report}.R` | 16S beta diversity by ethnicity | `beta-16s` |
+| `11_beta_diversity_16s_migration_{compute,report}.R` | 16S beta diversity by migration generation and acculturation | `beta-16s-migration` |
+| `12_differential_abundance_16s_asv_ethnicity_{compute,report}.R` | ASV differential abundance, including UpSet overlap reporting | `diffabund-16s` |
+| `13_differential_abundance_16s_genus_ethnicity_{compute,report}.R` | Genus differential abundance | `diffabund-16s-genus` |
+| `14_figure1.R` | Exposure, seasonality and diversity panels | `figure1` |
+| `15_figure2.R` | Beta-diversity effect summaries | `figure2` |
+| `16_figure3.R` | ASV differential-abundance panels | `figure3` |
 
-Shotgun beta diversity and differential abundance analyses, analogous to the 16S ones above, are planned but not yet implemented.
+### Computation, reporting and saved inputs
 
-Each script can be run individually via its pixi task, e.g. `pixi run beta-16s`, or the whole pipeline via `pixi run pipeline`. `pixi task list` shows all tasks with descriptions.
+- **Compute** scripts retain cohort selection, wrangling, metrics and statistical
+  tests. They save explicit lists of results and reporting inputs under the
+  corresponding `results/<analysis>/cache/` directory.
+- **Report** scripts read those objects and export tables and plots without
+  refitting models or repeating significance tests. Descriptive transformations
+  and plot positioning remain in reports. MaAsLin2's native files are written
+  during computation; the project's derived CSV tables are written by reports.
+- **Prepare** scripts produce reusable cleaned inputs. Cleaning retains diagnostic
+  plots, including rarefaction curves. The Amsterdam preparation step retains its
+  existing `results/airpollution/amsterdam_pc6_geo.rds` handoff.
+- **Figure** scripts consume saved analysis inputs/results and retain their own
+  panel layouts. Figure 1 uses exposure, seasonality, alpha-diversity, geometry
+  and beta-diversity caches; Figures 2 and 3 use beta-diversity caches and ASV
+  result tables respectively.
+- `scripts/lib/plot_style.R` holds the shared publication theme and ethnicity
+  palette. Shotgun plots retain their existing palette subset.
 
-Outputs (plots, tables) are written to `results/`, grouped by analysis type.
+Existing result paths and public Pixi task names are retained. Analysis entry
+points now run their compute/report dependency chain. For example:
+
+```bash
+pixi run alpha-16s-compute
+pixi run alpha-16s-report
+pixi run figure1
+pixi run pipeline
+```
+
+`airpollution-participants` runs both participant exposure and sample-characteristic
+reports. `upset-diffabund-16s` remains available and runs the ASV report, including
+UpSet plots. Genus reporting does not add UpSet or manuscript panels.
+
+```mermaid
+flowchart TD
+    raw[Raw clinical metadata] --> metadata[01 Clean metadata]
+    reads[Raw microbiome inputs] --> biome[02 Clean microbiome]
+    metadata --> biome
+    metadata --> exposure[04 Participant exposure compute]
+    exposure --> exposure_report[04 Participant exposure report]
+    biome --> descriptive[03 Cohort tables / 05 Sample characteristics / 07 Relative abundance]
+    biome --> alpha[08 and 09 Alpha diversity compute]
+    alpha --> alpha_report[08 and 09 Alpha diversity report]
+    biome --> beta[10 Ethnicity beta diversity compute]
+    beta --> beta_report[10 Ethnicity beta diversity report]
+    biome --> migration[11 Migration beta diversity compute]
+    migration --> migration_report[11 Migration beta diversity report]
+    biome --> da[12 ASV / 13 Genus differential abundance compute]
+    da --> da_report[12 ASV / 13 Genus reports]
+    geo[Raw geographical exposure inputs] --> maps[06 Amsterdam prepare]
+    maps --> maps_report[06 Amsterdam report]
+    exposure --> f1[14 Figure 1]
+    descriptive -->|05 seasonality cache| f1
+    alpha -->|08 16S cache| f1
+    maps --> f1
+    beta --> f1
+    beta --> f2[15 Figure 2]
+    da_report -->|12 ASV tables only| f3[16 Figure 3]
+```
+
+Exact input files and output ownership are declared alongside each task in
+`pixi.toml`. Missing report caches produce an error naming the producer task.
+The differential-abundance candidate covariates remain explicit, fixed analysis
+decisions informed by earlier beta-diversity findings; they are not automatically
+updated by rerunning beta diversity.
+
+Shotgun beta diversity and differential abundance remain planned analyses.
 
 ### Reusing results and detecting stale caches
 
@@ -60,7 +129,7 @@ Each task declares its own `inputs` and `outputs` in `pixi.toml`:
   exception: Bioconda has no R 4.4 build, so the setup script installs it with
   BiocManager.
 
-For example, changing only `13_figure2_assembly.R` rebuilds Figure 2 while
+For example, changing only `15_figure2.R` rebuilds Figure 2 while
 reusing valid cleaned data and beta-diversity models. Changing raw metadata
 reruns cleaning; downstream tasks rerun when their input contents change.
 Changing the locked software environment invalidates all analyses.
@@ -81,7 +150,7 @@ failed task does not establish a successful cache record. Pixi 0.66 has no
 its command directly in the Pixi environment, for example:
 
 ```bash
-pixi run Rscript --vanilla scripts/13_figure2_assembly.R
+pixi run Rscript --vanilla scripts/15_figure2.R
 ```
 
 This bypasses task dependencies and does not refresh the task's cache record;
@@ -95,56 +164,33 @@ undeclared inputs cannot be detected automatically. Environment-controlled
 test settings and changes to the separately installed `Maaslin2` package are
 also not cache inputs. Use the direct command above when intentionally using
 one of those overrides. Caching preserves a successful run; it does not by
-itself make stochastic analyses reproducible across rebuilds. Script 7a
-explicitly seeds its computations as described below.
+itself make stochastic analyses reproducible across rebuilds. The beta-diversity
+and migration computations
+retain their existing RNG behaviour: beta-diversity test-mode subsampling is
+seeded, but full-run permutation tests do not have a fixed production seed.
+Moving code does not make those rebuilds deterministic.
 
-### Resuming beta-diversity computation (7a)
+The differential-abundance compute scripts preserve the random draw formerly
+consumed by each labelled volcano plot between model fits. They save that draw
+with the pair's reporting inputs; the report passes it to ggrepel. This preserves
+the computation's RNG sequence without introducing a new fixed production seed.
 
-Script 7a has three explicit settings at the top:
+There are no internal resumable beta-diversity checkpoints in this implementation.
+The per-site beta-diversity RDS files are final reporting caches; an interrupted
+compute task must rerun through the normal Pixi dependency chain.
 
-```r
-BASELINE_R2_PERMUTATIONS <- 0L
-INFERENCE_PERMUTATIONS <- 999L
-BETA_DIV_SEED <- 42L
-```
+### Test modes
 
-The attenuation baselines contribute only R², which does not require a
-permutation test. Setting their permutation count to zero avoids computing
-unused p-values. All reported p-values and covariate-selection tests still
-use 999 permutations. If baseline p-values become a requested output, raise
-the baseline setting and add those p-values to the output explicitly.
+`BETA_DIV_TEST_N` and `DIFF_AB_TEST_N` retain their existing meaning: computation
+caps each qualifying ethnicity group at that many samples and writes to the
+corresponding `_test` analysis directory. Set the same value for the consuming
+report/figure command. `BETA_DIV_N_CORES` retains its existing worker setting.
+Figure outputs retain their existing filenames, including when built from test
+caches; run validation in an isolated copy to preserve publication outputs.
 
-Each independent test gets a deterministic seed derived from the master
-seed, site, distance metric and job name. Thus skipping a completed test,
-changing worker count or changing baseline permutations does not shift the
-random sequence used by another test. Newly seeded p-values can differ from
-historical unseeded results; repeated runs of the new code are reproducible
-within the same software environment.
-
-Internal checkpoints live under `results/beta_diversity/checkpoints/`
-(or `results/beta_diversity_test/checkpoints/`). They cover distances,
-individual covariate/pair tests, shared complete-case R² baselines,
-dispersion fits/tests, completed PERMANOVA blocks and PCoA ordinations.
-Every checkpoint validates the site's input-file contents, computation
-code, settings and software versions, plus a checksum of its saved result.
-A change to only the nose input preserves throat
-checkpoints. Worker count alone does not invalidate internal checkpoints.
-Changed code conservatively invalidates all 7a checkpoints.
-
-Checkpoints are published only after successful completion using an atomic
-file replacement. If interrupted, restart with the same normal command:
-
-```bash
-pixi run pipeline
-# Or finish just beta-diversity computation:
-pixi run beta-16s-compute
-```
-
-Look for `Checkpoint hit:` and `Computing:` messages identifying the site,
-metric and test. Completed jobs are reused; interrupted jobs are recomputed.
-The original per-site `.rds` files keep their reporting fields and are
-assembled atomically after both distances finish. Old files from before this
-checkpoint implementation cannot establish a resumable run.
+These environment settings are not Pixi cache inputs. Use direct commands in the
+Pixi environment for intentional override runs, as described above. Reports can
+be redrawn directly once their matching caches exist; they never fit models.
 
 ## Setup
 
@@ -183,3 +229,8 @@ Roel van der Ploeg, Kevin Singh, Barbara Verhaar
 
 ## Funding
 This project was supported by an RPA-PMH seed grant
+
+## Refactor validation
+
+See [READABILITY_VALIDATION.md](READABILITY_VALIDATION.md) for completed checks,
+remaining full-run validation, and the bounded regression-check command.
