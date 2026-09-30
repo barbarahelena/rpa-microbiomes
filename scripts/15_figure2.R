@@ -6,8 +6,7 @@
 ## Bray-Curtis pairwise PERMANOVA heatmaps: A/B unadjusted (nose/throat),
 ## C/D adjusted for significant covariates (nose/throat).
 ## Rebuilt from the .rds cache written by 10_beta_diversity_16s_ethnicity_compute.R, so
-## this script never repeats a permutation test - run pixi run beta-16s-compute first
-## (BETA_DIV_TEST_N=<n> for a fast test cache).
+## this script never repeats a permutation test - run pixi run beta-16s-compute first.
 
 ## Libraries
 library(here)
@@ -69,11 +68,7 @@ pairwise_permanova_heatmap <- function(pairwise_df, groups_order, title, subtitl
 setwd(here::here())
 dir.create("results/figures", recursive = TRUE, showWarnings = FALSE)
 
-## Beta diversity cache must match whatever 10_beta_diversity_16s_ethnicity_compute.R
-## was run with (BETA_DIV_TEST_N for a fast test cache, unset for the real one)
-test_n <- suppressWarnings(as.integer(Sys.getenv("BETA_DIV_TEST_N", "")))
-beta_outdir <- if (!is.na(test_n)) "results/beta_diversity_test" else "results/beta_diversity"
-if (!is.na(test_n)) cat("TEST MODE: reading beta diversity cache from", beta_outdir, "\n")
+beta_outdir <- "results/beta_diversity"
 
 ## Colours for the two distance metrics in the covariate-effect summary plot
 dist_colours <- c("Bray-Curtis" = "#2a78d6", "Weighted UniFrac" = "#eb6834")

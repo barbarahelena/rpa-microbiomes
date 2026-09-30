@@ -1,7 +1,8 @@
 # Readability refactor validation
 
 Baseline: `3704c99ef3b9018e88219d9b272f5a86bab6a536`.
-Updated: 2026-09-29. The full pipeline is intentionally left for the user to run.
+Updated: 2026-09-30. This document records completed validation; the temporary
+refactor test suite has been removed. The full pipeline has not been rerun.
 
 ## Shared plotting helpers (2026-09-30)
 
@@ -16,29 +17,22 @@ and caches. All 155 CSV/PDF/PNG outputs matched exactly, ignoring PDF date
 metadata only. Outputs were written under `/tmp`, not over publication results.
 This validates reporting equivalence, not a fresh full-pipeline computation.
 
-`tests/shared_plot_helpers.R` adds synthetic checks for bracket thresholds,
-per-facet positioning and caps, empty comparisons, taxon-label fallback and
-collisions, single-taxon matrix dimensions, metadata/sample alignment, both
-OTU-table orientations, and the three/four-group PCoA centroid boundary. It runs
-as part of `python3 tests/run_readability_checks.py`. The shared abundance helper
-also preserves metadata dimensions when only the ethnicity column is supplied.
+Synthetic checks passed for bracket thresholds, per-facet positioning and caps,
+empty comparisons, taxon-label fallback and collisions, single-taxon matrix
+dimensions, metadata/sample alignment, both OTU-table orientations, and the
+three/four-group PCoA centroid boundary. The shared abundance helper also
+preserves metadata dimensions when only the ethnicity column is supplied.
 
-## Current bounded checks
+## Completed bounded checks
 
-Run from the repository root with Python 3.11+ and the existing Pixi environment installed:
-
-```bash
-python3 tests/run_readability_checks.py
-```
-
-This runner does not invoke Pixi tasks, access cohort data, or run the full
-pipeline. It reads the baseline from Git and creates isolated temporary folders.
-It checks:
+The removed refactor suite ran in isolated temporary folders using a Git
+baseline and synthetic data. It did not run the full pipeline. It verified:
 
 - R parsing, preserved public task names, task dependencies and helper paths;
   unchanged package dependencies and lockfile.
 - Identical parsed cleaning expressions, shared theme, ethnicity beta-diversity
-  computation and statistical helper bodies against the baseline.
+  full-data computation and statistical helper bodies against the baseline,
+  allowing removal of the former beta-diversity subsampling mode.
 - Missing-cache errors for all eight cache-backed reports, with an identified
   producer and no attempt to recompute.
 - Migration computation/reporting on two synthetic sites, retaining the existing
@@ -59,7 +53,7 @@ RDS computation caches. `git diff --check` and Pixi task discovery also passed.
 
 The approved plotting-seed handoff retains the random draw formerly consumed
 by each labelled volcano plot between model fits. It does not introduce a new
-fixed production seed. Tests cover both the draw and no-draw branches.
+fixed production seed. Checks covered both the draw and no-draw branches.
 
 ## Earlier full-data comparisons (2026-09-28)
 
@@ -79,13 +73,13 @@ report edits, and rebuilding after compute edits. It used `--skip-deps` with
 prepared inputs, not a fresh full-pipeline execution.
 
 The earlier `/tmp/rpa-readability-baseline` and `/tmp/rpa-readability-validation`
-files are no longer present. The checked-in tests above reconstruct their own
-baseline from Git and print the new temporary artifact/log directory.
+files are no longer present.
 
 Earlier comparisons used the installed environment, external seed `20260928`,
-one beta-diversity worker, and `DIFF_AB_TEST_N=40` / `BETA_DIV_TEST_N=40` for reduced
-runs. Geography checks required `PROJ_DATA` to point to the installed environment's
-`share/proj` directory in both versions; no package or analysis fix was made.
+one beta-diversity worker, and 40 samples per qualifying group for reduced
+runs (beta-diversity subsampling has since been removed). Geography checks
+required `PROJ_DATA` to point to the installed environment's `share/proj`
+directory in both versions; no package or analysis fix was made.
 
 ## Full-run validation left to the user
 
@@ -105,5 +99,4 @@ Historical unseeded permutation p-values are not guaranteed to reproduce exactly
 their existing production RNG behaviour is unchanged. Keep any historical outputs
 needed for comparison before rerunning, since normal runs reuse their filenames.
 
-Existing repository data/results were not overwritten by these checks. Changes
-remain uncommitted.
+Existing repository data/results were not overwritten by these checks.

@@ -171,8 +171,8 @@ also not cache inputs. Use the direct command above when intentionally using
 one of those overrides. Caching preserves a successful run; it does not by
 itself make stochastic analyses reproducible across rebuilds. The beta-diversity
 and migration computations
-retain their existing RNG behaviour: beta-diversity test-mode subsampling is
-seeded, but full-run permutation tests do not have a fixed production seed.
+retain their existing RNG behaviour: permutation tests do not have a fixed
+production seed.
 Moving code does not make those rebuilds deterministic.
 
 The differential-abundance compute scripts preserve the random draw formerly
@@ -184,12 +184,14 @@ There are no internal resumable beta-diversity checkpoints in this implementatio
 The per-site beta-diversity RDS files are final reporting caches; an interrupted
 compute task must rerun through the normal Pixi dependency chain.
 
-### Test modes
+### Runtime settings
 
-`BETA_DIV_TEST_N` and `DIFF_AB_TEST_N` retain their existing meaning: computation
-caps each qualifying ethnicity group at that many samples and writes to the
-corresponding `_test` analysis directory. Set the same value for the consuming
-report/figure command. `BETA_DIV_N_CORES` retains its existing worker setting.
+Beta diversity uses all eligible samples and reads/writes
+`results/beta_diversity/`. `BETA_DIV_N_CORES` controls its worker count.
+
+For differential abundance, `DIFF_AB_TEST_N` caps each qualifying ethnicity
+group at that many samples and writes to the corresponding `_test` analysis
+directory. Set the same value for the consuming report/figure command.
 Figure outputs retain their existing filenames, including when built from test
 caches; run validation in an isolated copy to preserve publication outputs.
 
@@ -238,4 +240,4 @@ This project was supported by an RPA-PMH seed grant
 ## Refactor validation
 
 See [READABILITY_VALIDATION.md](READABILITY_VALIDATION.md) for completed checks,
-remaining full-run validation, and the bounded regression-check command.
+and remaining full-run validation.

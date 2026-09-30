@@ -66,11 +66,7 @@ build_pcoa_panel <- function(meta, pcoa, block, dist_name, site_name, eth_colour
 setwd(here::here())
 dir.create("results/figures", recursive = TRUE, showWarnings = FALSE)
 
-## Beta diversity cache must match whatever 10_beta_diversity_16s_ethnicity_compute.R
-## was run with (BETA_DIV_TEST_N for a fast test cache, unset for the real one)
-test_n <- suppressWarnings(as.integer(Sys.getenv("BETA_DIV_TEST_N", "")))
-beta_outdir <- if (!is.na(test_n)) "results/beta_diversity_test" else "results/beta_diversity"
-if (!is.na(test_n)) cat("TEST MODE: reading beta diversity cache from", beta_outdir, "\n")
+beta_outdir <- "results/beta_diversity"
 
 ## Shared ethnicity colours
 eth_colours <- ethnicity_colours

@@ -18,11 +18,7 @@ source(here::here("scripts", "lib", "diversity_plots.R"))
 ## Setup
 setwd(here::here())
 
-## Test mode must match the outdir 10_beta_diversity_16s_ethnicity_compute.R wrote the
-## cache to. Example: BETA_DIV_TEST_N=40 Rscript scripts/10_beta_diversity_16s_ethnicity_report.R
-test_n <- suppressWarnings(as.integer(Sys.getenv("BETA_DIV_TEST_N", "")))
-outdir <- if (!is.na(test_n)) "results/beta_diversity_test" else "results/beta_diversity"
-if (!is.na(test_n)) cat("TEST MODE: reading/writing", outdir, "\n")
+outdir <- "results/beta_diversity"
 
 for (sub in c("pcoa", "permanova", "covariate_screen", "betadisper", "batch_effect")) {
     dir.create(file.path(outdir, sub), recursive = TRUE, showWarnings = FALSE)

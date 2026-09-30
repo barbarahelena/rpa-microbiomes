@@ -15,13 +15,7 @@ library(parallel)
 ## Setup
 setwd(here::here())
 
-## Test mode: set BETA_DIV_TEST_N to cap each ethnicity group at N samples
-## after group-size filtering, so the full pipeline runs in seconds instead
-## of many minutes. Writes to a separate results dir so it can never clobber
-## a real run. Example: BETA_DIV_TEST_N=40 Rscript scripts/10_beta_diversity_16s_ethnicity_compute.R
-test_n <- suppressWarnings(as.integer(Sys.getenv("BETA_DIV_TEST_N", "")))
-outdir <- if (!is.na(test_n)) "results/beta_diversity_test" else "results/beta_diversity"
-if (!is.na(test_n)) cat("TEST MODE: capping each group at", test_n, "samples, writing to", outdir, "\n")
+outdir <- "results/beta_diversity"
 
 dir.create(file.path(outdir, "cache"), recursive = TRUE, showWarnings = FALSE)
 
@@ -342,23 +336,6 @@ for (site_name in names(sites)) {
         as("data.frame") |>
         mutate(EthnicityTotal = droplevels(factor(EthnicityTotal)))
     sample_data(ps) <- sample_data(meta)
-
-    ## Test mode: cap each group at test_n samples (group eligibility above
-    ## was already decided from the full data - every group here has > 50
-    ## samples, so test_n is always <= the group size)
-    if (!is.na(test_n)) {
-        set.seed(42)
-        keep_samples <- meta |>
-            rownames_to_column("sample_id") |>
-            group_by(EthnicityTotal) |>
-            slice_sample(n = test_n) |>
-            pull(sample_id)
-        ps <- prune_samples(keep_samples, ps)
-        meta <- sample_data(ps) |>
-            as("data.frame") |>
-            mutate(EthnicityTotal = droplevels(factor(EthnicityTotal)))
-        sample_data(ps) <- sample_data(meta)
-    }
 
     n_samples <- nsamples(ps)
     group_ns <- meta |> count(EthnicityTotal, name = "n") |> arrange(desc(n))

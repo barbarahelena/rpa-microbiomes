@@ -247,7 +247,7 @@ inputs = [
     "data/processed/ps_nose_rarefied.RDS",
 ]
 outputs = [
-    "results/beta_diversity{,_test}/cache/beta_diversity_16s_{throat,nose}.rds",
+    "results/beta_diversity/cache/beta_diversity_16s_{throat,nose}.rds",
 ]
 description = "Beta diversity, 16S throat/nose: PERMANOVA/betadisper computation (permutation-heavy, cached)"
 
@@ -259,10 +259,10 @@ inputs = [
     "scripts/lib/diversity_plots.R",
     "scripts/lib/plot_style.R",
     "pixi.lock",
-    "results/beta_diversity{,_test}/cache/beta_diversity_16s_{throat,nose}.rds",
+    "results/beta_diversity/cache/beta_diversity_16s_{throat,nose}.rds",
 ]
 outputs = [
-    "results/beta_diversity{,_test}/{pcoa,betadisper,permanova,covariate_screen,batch_effect}/**/*",
+    "results/beta_diversity/{pcoa,betadisper,permanova,covariate_screen,batch_effect}/**/*",
 ]
 description = "Beta diversity, 16S throat/nose: rebuild plots/tables from cached PERMANOVA/betadisper results"
 
@@ -402,7 +402,7 @@ inputs = [
     "results/sample_metadata/cache/seasonality_16s_*.rds",
     "results/alpha_diversity/cache/alpha_16s_*.rds",
     "results/airpollution/amsterdam_pc6_geo.rds",
-    "results/beta_diversity{,_test}/cache/beta_diversity_16s_{throat,nose}.rds",
+    "results/beta_diversity/cache/beta_diversity_16s_{throat,nose}.rds",
 ]
 outputs = [
     "results/figures/figure1.*",
@@ -417,7 +417,7 @@ inputs = [
     "scripts/15_figure2.R",
     "scripts/lib/plot_style.R",
     "pixi.lock",
-    "results/beta_diversity{,_test}/cache/beta_diversity_16s_{throat,nose}.rds",
+    "results/beta_diversity/cache/beta_diversity_16s_{throat,nose}.rds",
 ]
 outputs = [
     "results/figures/figure2.*",
