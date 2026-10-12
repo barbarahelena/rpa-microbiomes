@@ -1,6 +1,8 @@
-## Descriptive composition plots: stacked bar plots of relative abundance
-## 16S: overall composition (no ethnicity metadata available)
-## Shotgun: split by ethnicity (Dutch vs South-Asian Surinamese)
+## Describe microbiome composition with stacked relative-abundance bars.
+## 1. Load rarefied nose/throat 16S and throat/tongue shotgun data.
+## 2. Summarise phylum, family, and genus abundances; group minor taxa as Other.
+## 3. Save 16S plots by site and shotgun plots by ethnicity
+##    (Dutch vs South-Asian Surinamese).
 
 ## Libraries
 library(here)
@@ -8,38 +10,9 @@ library(tidyverse)
 library(phyloseq)
 
 ## Functions
-theme_Publication <- function(base_size=14, base_family="sans") {
-    library(grid)
-    library(ggthemes)
-    library(stringr)
-    (theme_foundation(base_size=base_size, base_family=base_family)
-        + theme(plot.title = element_text(face = "bold",
-                                          size = rel(1.0), hjust = 0.5),
-                text = element_text(),
-                panel.background = element_rect(colour = NA, fill = NA),
-                plot.background = element_rect(colour = NA, fill = NA),
-                panel.border = element_rect(colour = NA),
-                axis.title = element_text(face = "bold",size = rel(0.8)),
-                axis.title.y = element_text(angle=90, vjust =2),
-                axis.title.x = element_text(vjust = -0.2),
-                axis.text = element_text(size = rel(0.7)),
-                axis.text.x = element_text(angle = 0),
-                axis.line = element_line(colour="black"),
-                axis.ticks = element_line(),
-                panel.grid.major = element_line(colour="#f0f0f0"),
-                panel.grid.minor = element_blank(),
-                legend.key = element_rect(colour = NA),
-                legend.position = "bottom",
-                legend.key.size= unit(0.2, "cm"),
-                legend.spacing  = unit(0, "cm"),
-                plot.margin=unit(c(10,5,5,5),"mm"),
-                strip.background=element_rect(colour="#f0f0f0",fill="#f0f0f0"),
-                strip.text = element_text(face="bold"),
-                plot.caption = element_text(size = rel(0.5), face = "italic")
-        ))
-      }
+source(here::here("scripts", "lib", "plot_style.R"))
 
-# Helper: summarise mean relative abundance, keep top_n taxa, lump rest as "Other"
+## ---- Helper: summarise relative abundance and group minor taxa as Other ----
 # df must have columns: sample_id, Abundance, and the tax_rank column
 prep_abundance <- function(df, tax_rank, top_n, group_col = NULL) {
   df <- df |> mutate(taxon = replace_na(.data[[tax_rank]], "Unclassified"))
@@ -116,7 +89,7 @@ df_16s <- bind_rows(
   process_16s(ps_throat, "Throat")
 )
 
-# Phylum-level plot
+## ---- Summarise and plot 16S phylum composition ----
 df_16s_phylum <- prep_abundance(df_16s, "Phylum", top_n = 10, group_col = "site")
 
 n_taxa <- length(levels(df_16s_phylum$taxon))
@@ -137,7 +110,7 @@ ggplot(df_16s_phylum, aes(x = site, y = mean_abund, fill = taxon)) +
   guides(fill = guide_legend(ncol = 2))
 ggsave("results/composition/16s_phylum_composition.pdf", width = 6, height = 6)
 
-# Family-level plot
+## ---- Summarise and plot 16S family composition ----
 df_16s_family <- prep_abundance(df_16s, "Family", top_n = 12, group_col = "site")
 
 n_taxa_f <- length(levels(df_16s_family$taxon))
@@ -158,7 +131,7 @@ ggplot(df_16s_family, aes(x = site, y = mean_abund, fill = taxon)) +
   guides(fill = guide_legend(ncol = 2))
 ggsave("results/composition/16s_family_composition.pdf", width = 7, height = 7)
 
-# Genus-level plot
+## ---- Summarise and plot 16S genus composition ----
 df_16s_genus <- prep_abundance(df_16s, "Genus", top_n = 15, group_col = "site")
 
 n_taxa_g <- length(levels(df_16s_genus$taxon))

@@ -1,4 +1,10 @@
-## Data cleaning of microbiome data
+## Clean 16S and shotgun microbiome data and link clinical metadata.
+## 1. Add sampling season/batch; remove unsuitable ASVs, contaminants,
+##    negative controls, and duplicate 16S samples; tidy taxonomy labels.
+## 2. Split nose/throat samples, plot rarefaction curves, and rarefy counts.
+## 3. Link HELIUS metadata and save both unrarefied and rarefied 16S objects.
+## 4. Merge MetaPhlAn batches and save shotgun taxonomy, abundance matrices,
+##    and metadata-linked throat/tongue objects to data/processed.
 
 ## Libraries
 library(phyloseq)
@@ -9,45 +15,14 @@ library(decontam)
 library(Biostrings)
 
 ## Functions
-theme_Publication <- function(base_size=14, base_family="sans") {
-    library(grid)
-    library(ggthemes)
-    library(stringr)
-    (theme_foundation(base_size=base_size, base_family=base_family)
-        + theme(plot.title = element_text(face = "bold",
-                                          size = rel(1.0), hjust = 0.5),
-                text = element_text(),
-                panel.background = element_rect(colour = NA, fill = NA),
-                plot.background = element_rect(colour = NA, fill = NA),
-                panel.border = element_rect(colour = NA),
-                axis.title = element_text(face = "bold",size = rel(0.8)),
-                axis.title.y = element_text(angle=90, vjust =2),
-                axis.title.x = element_text(vjust = -0.2),
-                axis.text = element_text(size = rel(0.7)),
-                axis.text.x = element_text(angle = 0), 
-                axis.line = element_line(colour="black"),
-                axis.ticks = element_line(),
-                panel.grid.major = element_line(colour="#f0f0f0"),
-                panel.grid.minor = element_blank(),
-                legend.key = element_rect(colour = NA),
-                legend.position = "bottom",
-                # legend.direction = "horizontal",
-                legend.key.size= unit(0.2, "cm"),
-                legend.spacing  = unit(0, "cm"),
-                # legend.title = element_text(face="italic"),
-                plot.margin=unit(c(10,5,5,5),"mm"),
-                strip.background=element_rect(colour="#f0f0f0",fill="#f0f0f0"),
-                strip.text = element_text(face="bold"),
-                plot.caption = element_text(size = rel(0.5), face = "italic")
-        ))
-      }
+source(here::here("scripts", "lib", "plot_style.R"))
 
 # Set working directory to project root and create output directories if needed
 setwd(here::here())
 dir.create("data/processed", recursive = TRUE, showWarnings = FALSE)
 dir.create("results/rarefaction", recursive = TRUE, showWarnings = FALSE)
 
-# 16S dataset
+## ---- Load and clean 16S samples and taxonomy ----
 meta <- rio::import("data/raw/sample_sheet_withmeta.csv")
 names(meta)
 meta$sample <- str_c("S", meta$sample)
@@ -66,7 +41,7 @@ table(meta$Season, useNA = "ifany")
 
 # Derive technical batch covariate: sequencing batch (Illumina run ID). DNA
 # isolation date was also tested as a candidate batch covariate but explains
-# largely overlapping beta-diversity variance (see scripts/7a_beta_diversity_16s_compute.R);
+# largely overlapping beta-diversity variance (see scripts/10_beta_diversity_16s_ethnicity_compute.R);
 # only sequencing batch is retained.
 meta$SeqBatch <- factor(na_if(meta$Seq_ID, ""))
 table(meta$SeqBatch, useNA = "ifany")
@@ -163,7 +138,7 @@ tax$Tax <- ifelse(!is.na(tax$Genus)   & !is.na(tax$Species), paste(tax$Genus, ta
 tax$ASV <- rownames(tax)
 tax_table(psnoneg) <- as.matrix(tax)
 
-# Identify throat and nose samples
+## ---- Split 16S samples by site and assess rarefaction ----
 throat_samples <- sample_names(psnoneg)[str_detect(sample_names(psnoneg), "Throat")]
 nose_samples <- sample_names(psnoneg)[str_detect(sample_names(psnoneg), "Nose")]
 
@@ -296,7 +271,7 @@ ps_throat_rarefied # 1626 taxa and 2390 samples
 sample_names(ps_nose_rarefied)
 sample_names(ps_throat_rarefied)
 
-# Link 16S samples to HELIUS clinical metadata via ID offset
+## ---- Link HELIUS metadata and save 16S objects ----
 # Ext_ID (6-digit) + 1900253 = HELIUS internal ID (7-digit)
 helius_meta <- readRDS("data/processed/HELIUSmetadata_clean.RDS")
 
@@ -326,7 +301,7 @@ saveRDS(ps_nose, "data/processed/ps_nose.RDS")
 saveRDS(ps_throat_rarefied, "data/processed/ps_throat_rarefied.RDS")
 saveRDS(ps_nose_rarefied, "data/processed/ps_nose_rarefied.RDS")
 
-# Metagenomics: merge batches
+## ---- Merge shotgun batches and save metadata-linked objects ----
 batch1 <- rio::import("data/raw/combined_table.txt")
 dim(batch1) # 3 samples in the last batch (broken fastqs)
 batch2 <- rio::import("data/raw/combined_table2.txt")
